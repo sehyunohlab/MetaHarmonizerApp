@@ -1,6 +1,6 @@
 fastapi==0.141.1
-starlette==1.6.0
-uvicorn[standard]==0.53.0
+starlette==1.7.0
+uvicorn[standard]==0.54.0
 python-multipart==0.0.32
 pydantic==2.13.5
 pydantic-settings==2.15.0
@@ -16,7 +16,7 @@ requests>=2.34.2
 google-genai>=1.75.0
 
 # --- Persistence + cache (Sprint 2 / Dev infra) ---------------------------
-sqlalchemy[asyncio]==2.0.52
+sqlalchemy[asyncio]==2.1.1
 asyncpg==0.31.0
 alembic==1.20.0
 redis==5.3.1
@@ -25,13 +25,13 @@ arq==0.28.0
 
 # --- Observability --------------------------------------------------------
 # Optional: error tracking. init_sentry() no-ops if unset/uninstalled.
-sentry-sdk[fastapi]==2.69.1
+sentry-sdk[fastapi]==2.70.0
 # Prometheus golden-signal metrics at admin-scoped /metrics.
 prometheus-client==0.26.0
 
 # --- Auth (Sprint 3) ------------------------------------------------------
 argon2-cffi==23.1.0
-pyjwt==2.14.0
+pyjwt==2.15.0
 email-validator==2.3.0
 
 # --- Federation-lite (G1): Ed25519 signing --------------------------------
