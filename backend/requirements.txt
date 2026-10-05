@@ -1,4 +1,4 @@
-fastapi==0.141.1
+fastapi==0.142.2
 starlette==1.7.0
 uvicorn[standard]==0.54.0
 python-multipart==0.0.32
@@ -8,7 +8,7 @@ pandas==2.3.3
 rapidfuzz==3.14.6
 numpy==1.26.4
 sentence-transformers==5.7.0
-transformers==5.17.0
+transformers==5.18.0
 # Docker images preinstall the hash-pinned 2.14.0+cpu wheel for their
 # architecture; keep this compatibility floor synchronized with Dockerfile.
 torch>=2.14.0
@@ -16,7 +16,7 @@ requests>=2.34.2
 google-genai>=1.75.0
 
 # --- Persistence + cache (Sprint 2 / Dev infra) ---------------------------
-sqlalchemy[asyncio]==2.1.1
+sqlalchemy[asyncio]==2.1.2
 asyncpg==0.31.0
 alembic==1.20.0
 redis==5.3.1
@@ -25,17 +25,17 @@ arq==0.28.0
 
 # --- Observability --------------------------------------------------------
 # Optional: error tracking. init_sentry() no-ops if unset/uninstalled.
-sentry-sdk[fastapi]==2.70.0
+sentry-sdk[fastapi]==2.71.0
 # Prometheus golden-signal metrics at admin-scoped /metrics.
 prometheus-client==0.26.0
 
 # --- Auth (Sprint 3) ------------------------------------------------------
 argon2-cffi==23.1.0
-pyjwt==2.15.0
+pyjwt==2.15.1
 email-validator==2.3.0
 
 # --- Federation-lite (G1): Ed25519 signing --------------------------------
-cryptography==50.0.1
+cryptography==50.0.2
 
 # --- Object storage (S3 / Cloudflare R2) ----------------------------------
 # Only used when OBJECT_STORE_URL is s3://… ; the file:// backend needs nothing.
