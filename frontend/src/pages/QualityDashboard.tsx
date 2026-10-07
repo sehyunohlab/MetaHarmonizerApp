@@ -288,7 +288,7 @@ function confColor(minVal: number): string {
 function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-slate-200 bg-white/95 px-2.5 py-1.5 text-xs shadow-card backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+    <div className="rounded-lg border border-slate-200 bg-white/95 px-2.5 py-1.5 text-xs shadow-card backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/95">
       {label !== undefined && label !== '' && (
         <p className="mb-0.5 font-medium text-slate-500">{label}</p>
       )}
@@ -426,7 +426,7 @@ function Kpi({
   return (
     <Card
       onClick={onClick}
-      className={`p-4 ${onClick ? 'cursor-pointer transition hover:border-primary-300 hover:shadow-sm dark:hover:border-primary-500/50 dark:hover:bg-slate-800/60' : ''}`}
+      className={`p-4 ${onClick ? 'cursor-pointer transition hover:border-primary-300 hover:shadow-xs dark:hover:border-primary-500/50 dark:hover:bg-slate-800/60' : ''}`}
     >
       <div className="flex items-center gap-2 text-slate-400">
         {icon}

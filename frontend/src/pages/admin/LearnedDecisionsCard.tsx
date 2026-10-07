@@ -103,7 +103,7 @@ export function LearnedDecisionsCard() {
             type="button"
             onClick={() => { candidates.refetch(); shared.refetch(); }}
             disabled={candidates.isFetching || shared.isFetching}
-            className="inline-flex items-center gap-1.5 rounded border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            className="inline-flex items-center gap-1.5 rounded-sm border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
             title="Refresh the queue and agreement stats (another admin may have promoted something)"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${candidates.isFetching || shared.isFetching ? 'animate-spin' : ''}`} />

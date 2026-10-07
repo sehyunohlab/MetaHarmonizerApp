@@ -129,7 +129,7 @@ export default function AdminPage() {
           else next.set('tab', tab);
           setSearchParams(next);
         }}
-        className="w-full overflow-x-auto"
+        className="mt-6 w-full overflow-x-auto"
         segments={[
           {
             value: 'users',

@@ -164,7 +164,7 @@ export default function UploadPage() {
         icon={<Upload className="h-6 w-6" />}
       />
 
-      <div>
+      <div className="mt-7">
         <FileUploader
           onFileSelected={handleFileSelected}
           disabled={isGuest || state === 'uploading'}
@@ -371,7 +371,7 @@ export default function UploadPage() {
       {previewOpen && preview && file &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm animate-fade-in"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs animate-fade-in"
             onClick={() => setPreviewOpen(false)}
           >
             <div

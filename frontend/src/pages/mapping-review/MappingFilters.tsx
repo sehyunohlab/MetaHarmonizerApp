@@ -37,7 +37,7 @@ export function MappingFilters({
           id="stage-filter"
           value={filterStage}
           onChange={(e) => onFilterStageChange(e.target.value as FilterStage)}
-          className="text-sm border border-slate-200 rounded-lg px-2 py-1 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          className="text-sm border border-slate-200 rounded-lg px-2 py-1 focus:border-primary-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
         >
           <option value="all">All</option>
           <option value="stage1">S1 Dict/Fuzzy</option>
@@ -56,7 +56,7 @@ export function MappingFilters({
           onChange={(e) => onSearchChange(e.target.value)}
           aria-label="Search columns"
           placeholder="Search columns…  ( / )"
-          className="w-48 rounded-lg border border-slate-200 py-1 pl-7 pr-2 text-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          className="w-48 rounded-lg border border-slate-200 py-1 pl-7 pr-2 text-sm focus:border-primary-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
         />
       </div>
       {queueStats && (

@@ -84,7 +84,7 @@ export function SchemaVersionsCard() {
               setToId(null);
               setDiff(null);
             }}
-            className="mt-1 rounded border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            className="mt-1 rounded-sm border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
           >
             {engineSchemas.data?.map((s) => (
               <option key={s.key} value={s.key}>{s.label}</option>
@@ -109,7 +109,7 @@ export function SchemaVersionsCard() {
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="e.g. v2"
-              className="mt-1 w-28 rounded border border-slate-200 px-2 py-1.5 text-sm focus:border-primary-400 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              className="mt-1 w-28 rounded-sm border border-slate-200 px-2 py-1.5 text-sm focus:border-primary-400 focus:outline-hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             />
           </div>
           <div>
@@ -122,7 +122,7 @@ export function SchemaVersionsCard() {
               type="file"
               accept=".csv"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="mt-1 text-sm file:mr-2 file:rounded file:border-0 file:bg-primary-50 file:px-2 file:py-1 file:text-primary-700 dark:file:bg-primary-500/15 dark:file:text-primary-300"
+              className="mt-1 text-sm file:mr-2 file:rounded-sm file:border-0 file:bg-primary-50 file:px-2 file:py-1 file:text-primary-700 dark:file:bg-primary-500/15 dark:file:text-primary-300"
             />
           </div>
           <Button
@@ -183,7 +183,7 @@ export function SchemaVersionsCard() {
                 aria-label="From version"
                 value={fromId ?? ''}
                 onChange={(e) => setFromId(Number(e.target.value) || null)}
-                className="rounded border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                className="rounded-sm border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
               >
                 <option value="">From…</option>
                 {versions.data!.map((v) => (
@@ -195,7 +195,7 @@ export function SchemaVersionsCard() {
                 aria-label="To version"
                 value={toId ?? ''}
                 onChange={(e) => setToId(Number(e.target.value) || null)}
-                className="rounded border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                className="rounded-sm border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
               >
                 <option value="">To…</option>
                 {versions.data!.map((v) => (
@@ -225,7 +225,7 @@ export function SchemaVersionsCard() {
                     <span className="text-xs font-semibold text-emerald-700">Added fields</span>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {diff.added_fields.map((f) => (
-                        <span key={f.field} className="rounded bg-emerald-50 px-1.5 py-0.5 font-mono text-xs text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                        <span key={f.field} className="rounded-sm bg-emerald-50 px-1.5 py-0.5 font-mono text-xs text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
                           {f.field}
                         </span>
                       ))}
@@ -237,7 +237,7 @@ export function SchemaVersionsCard() {
                     <span className="text-xs font-semibold text-red-700">Removed fields</span>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {diff.removed_fields.map((f) => (
-                        <span key={f.field} className="rounded bg-red-50 px-1.5 py-0.5 font-mono text-xs text-red-700 line-through dark:bg-red-500/15 dark:text-red-300">
+                        <span key={f.field} className="rounded-sm bg-red-50 px-1.5 py-0.5 font-mono text-xs text-red-700 line-through dark:bg-red-500/15 dark:text-red-300">
                           {f.field}
                         </span>
                       ))}

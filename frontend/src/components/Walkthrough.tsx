@@ -60,7 +60,7 @@ const SEEN_KEY = 'mh_tour_seen_v4';
 /** A little "app window" frame so each preview reads like a screenshot. */
 function Frame({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:shadow-none">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs dark:border-slate-700 dark:bg-slate-900 dark:shadow-none">
       <div className="flex items-center gap-1.5 border-b border-slate-100 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-800/60">
         <span className="h-2 w-2 rounded-full bg-rose-300" />
         <span className="h-2 w-2 rounded-full bg-amber-300" />
@@ -157,8 +157,8 @@ function BatchMock() {
           <CheckCheck className="h-3.5 w-3.5" />3 selected
         </span>
         <span className="flex items-center gap-1">
-          <span className="rounded bg-primary-600 px-2 py-0.5 text-[10px] font-semibold text-white">Accept</span>
-          <span className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+          <span className="rounded-sm bg-primary-600 px-2 py-0.5 text-[10px] font-semibold text-white">Accept</span>
+          <span className="rounded-sm border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
             Reject
           </span>
         </span>
@@ -170,11 +170,11 @@ function BatchMock() {
             key={col}
             className="grid grid-cols-[auto_1fr_auto] items-center gap-2 border-t border-slate-100 bg-primary-50/30 px-3 py-1.5 dark:border-slate-800 dark:bg-primary-500/5"
           >
-            <span className="grid h-4 w-4 place-items-center rounded bg-primary-600 text-white">
+            <span className="grid h-4 w-4 place-items-center rounded-sm bg-primary-600 text-white">
               <Check className="h-2.5 w-2.5" />
             </span>
             <span className="flex items-center gap-1 truncate text-slate-700 dark:text-slate-300">
-              <code className="rounded bg-slate-100 px-1 text-[11px] dark:bg-slate-800">{col}</code>
+              <code className="rounded-sm bg-slate-100 px-1 text-[11px] dark:bg-slate-800">{col}</code>
               <ArrowRight className="h-3 w-3 shrink-0 text-slate-300" />primary_site
             </span>
             <span className="text-[10px] font-semibold text-emerald-600">{conf}</span>
@@ -183,14 +183,14 @@ function BatchMock() {
       </div>
       {/* A single, ungrouped row still supports per-row edit */}
       <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 border-t border-slate-100 px-3 py-1.5 dark:border-slate-800">
-        <span className="h-4 w-4 rounded border border-slate-300" />
+        <span className="h-4 w-4 rounded-sm border border-slate-300" />
         <span className="flex items-center gap-1 truncate text-slate-700 dark:text-slate-300">
-          <code className="rounded bg-slate-100 px-1 text-[11px] dark:bg-slate-800">MSI_status</code>
+          <code className="rounded-sm bg-slate-100 px-1 text-[11px] dark:bg-slate-800">MSI_status</code>
           <ArrowRight className="h-3 w-3 shrink-0 text-slate-300" />msi_status
         </span>
         <span className="flex items-center gap-1.5">
           <span className="text-[10px] font-semibold text-emerald-600">96%</span>
-          <span className="grid h-4 w-4 place-items-center rounded bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+          <span className="grid h-4 w-4 place-items-center rounded-sm bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
             <Pencil className="h-2.5 w-2.5" />
           </span>
         </span>
@@ -213,10 +213,10 @@ function LearnMock() {
       <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2 dark:border-emerald-500/25 dark:bg-emerald-500/10">
         <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Your next study</p>
         <div className="flex items-center gap-1.5">
-          <code className="rounded bg-white px-1 text-[11px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">tumor_site</code>
+          <code className="rounded-sm bg-white px-1 text-[11px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">tumor_site</code>
           <ArrowRight className="h-3 w-3 shrink-0 text-slate-300" />
           <span className="font-semibold text-slate-800 dark:text-slate-200">primary_site</span>
-          <span className="ml-auto flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+          <span className="ml-auto flex items-center gap-1 rounded-sm bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
             <Check className="h-2.5 w-2.5" />auto-filled
           </span>
         </div>
@@ -244,15 +244,15 @@ function OntologyMock() {
             <span className="truncate text-slate-500">{raw}</span>
             <ArrowRight className="h-3 w-3 shrink-0 text-slate-300" />
             <span className="font-semibold text-slate-800 dark:text-slate-200">{term}</span>
-            <span className="shrink-0 rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
+            <span className="shrink-0 rounded-sm bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
               {code}
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <span className="grid h-5 w-5 place-items-center rounded bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
+            <span className="grid h-5 w-5 place-items-center rounded-sm bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
               <Check className="h-3 w-3" />
             </span>
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            <span className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               Override
             </span>
           </div>
@@ -283,9 +283,9 @@ function QualityMock() {
           <span className="font-semibold text-slate-800 dark:text-slate-200">0.82</span>
         </div>
         <div className="flex gap-1 pt-1" title="Match stages">
-          <span className="h-1.5 flex-[10] rounded-full bg-blue-500" />
-          <span className="h-1.5 flex-[3] rounded-full bg-orange-500" />
-          <span className="h-1.5 flex-[2] rounded-full bg-teal-500" />
+          <span className="h-1.5 flex-10 rounded-full bg-blue-500" />
+          <span className="h-1.5 flex-3 rounded-full bg-orange-500" />
+          <span className="h-1.5 flex-2 rounded-full bg-teal-500" />
         </div>
       </div>
     </div>
@@ -562,7 +562,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
       {/* Only shown while someone is actually in the app (guest or signed-in),
           so finishing as a guest — which clears both — closes it cleanly. */}
       {open && slide && (isGuest || !!user) && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-70 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
           <div className="w-[min(34rem,100%)] animate-pop-in rounded-3xl border border-slate-200 bg-white p-6 shadow-pop motion-reduce:animate-none dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
             {/* Header: icon + title + the one-line curator action. */}
             <div className="flex items-start justify-between gap-3">

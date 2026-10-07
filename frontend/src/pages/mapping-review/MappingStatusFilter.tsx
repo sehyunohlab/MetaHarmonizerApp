@@ -18,6 +18,7 @@ export function MappingStatusFilter({
     <SegmentedControl<FilterStatus>
       value={filterStatus}
       onChange={onChange}
+      className="mt-4"
       segments={[
         {
           value: 'pending',

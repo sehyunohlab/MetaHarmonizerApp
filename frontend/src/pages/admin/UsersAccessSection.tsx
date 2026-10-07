@@ -123,7 +123,7 @@ export function UsersAccessSection({
                   <p className="flex items-center gap-1.5 truncate text-xs text-slate-500">
                     {u.email}
                     {u.admin_requested && (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                      <span className="rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
                         also requested admin
                       </span>
                     )}
@@ -195,7 +195,7 @@ export function UsersAccessSection({
                           value={u.role}
                           disabled={isSelf || rolePending}
                           onChange={(e) => onSetRole(u.id, e.target.value as Role)}
-                          className="field !w-auto !py-1.5 text-xs disabled:opacity-60"
+                          className="field w-auto! py-1.5! text-xs disabled:opacity-60"
                         >
                           {ROLES.map((r) => (
                             <option key={r} value={r}>

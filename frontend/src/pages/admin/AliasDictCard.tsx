@@ -114,7 +114,7 @@ export function AliasDictCard() {
               type="file"
               accept=".csv,.tsv,.txt"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="mt-1 text-sm file:mr-2 file:rounded file:border-0 file:bg-primary-50 file:px-2 file:py-1 file:text-primary-700 dark:file:bg-primary-500/15 dark:file:text-primary-300"
+              className="mt-1 text-sm file:mr-2 file:rounded-sm file:border-0 file:bg-primary-50 file:px-2 file:py-1 file:text-primary-700 dark:file:bg-primary-500/15 dark:file:text-primary-300"
             />
           </div>
           <Button type="submit" loading={uploadM.isPending} disabled={!file} icon={<Upload className="h-4 w-4" />}>
@@ -139,7 +139,7 @@ export function AliasDictCard() {
               value={addSource}
               onChange={(e) => setAddSource(e.target.value)}
               placeholder="e.g. patient_sex"
-              className="mt-1 w-40 rounded border border-slate-200 px-2 py-1.5 text-sm focus:border-primary-400 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              className="mt-1 w-40 rounded-sm border border-slate-200 px-2 py-1.5 text-sm focus:border-primary-400 focus:outline-hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             />
           </div>
           <div>
@@ -152,7 +152,7 @@ export function AliasDictCard() {
               value={addField}
               onChange={(e) => setAddField(e.target.value)}
               placeholder="e.g. sex"
-              className={`mt-1 w-40 rounded border px-2 py-1.5 text-sm focus:outline-none dark:bg-slate-900 dark:text-slate-200 ${
+              className={`mt-1 w-40 rounded border px-2 py-1.5 text-sm focus:outline-hidden dark:bg-slate-900 dark:text-slate-200 ${
                 unknownField ? 'border-amber-400' : 'border-slate-200 focus:border-primary-400 dark:border-slate-700'
               }`}
             />
@@ -186,7 +186,7 @@ export function AliasDictCard() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search aliases or fields…"
-                className="w-full rounded border border-slate-200 py-1.5 pl-8 pr-2 text-sm focus:border-primary-400 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                className="w-full rounded-sm border border-slate-200 py-1.5 pl-8 pr-2 text-sm focus:border-primary-400 focus:outline-hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
               />
             </div>
             <button
@@ -194,7 +194,7 @@ export function AliasDictCard() {
               onClick={() =>
                 adminExportAliases('merged').catch(() => toast.error('Export failed'))
               }
-              className="inline-flex items-center gap-1.5 rounded border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              className="inline-flex items-center gap-1.5 rounded-sm border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
               title="Download the full (built-in + custom) alias dictionary as CSV"
             >
               <Download className="h-4 w-4" />
@@ -205,7 +205,7 @@ export function AliasDictCard() {
               onClick={() =>
                 adminExportAliases('custom').catch(() => toast.error('Export failed'))
               }
-              className="inline-flex items-center gap-1.5 rounded border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              className="inline-flex items-center gap-1.5 rounded-sm border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
               title="Download only the admin-added (custom) aliases as CSV"
             >
               <Download className="h-4 w-4" />
@@ -242,7 +242,7 @@ export function AliasDictCard() {
                           <button
                             title="Remove alias"
                             onClick={() => delM.mutate(r)}
-                            className="rounded p-1 text-rose-500 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                            className="rounded-sm p-1 text-rose-500 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -260,7 +260,7 @@ export function AliasDictCard() {
         </div>
 
         <p className="text-xs text-slate-400">
-          Bulk row example: <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">SEX,&quot;gender,patient_sex,gender_at_birth&quot;</code>
+          Bulk row example: <code className="rounded-sm bg-slate-100 px-1 dark:bg-slate-800">SEX,&quot;gender,patient_sex,gender_at_birth&quot;</code>
         </p>
       </CardBody>
     </Card>

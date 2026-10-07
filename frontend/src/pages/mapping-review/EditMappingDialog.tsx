@@ -29,8 +29,8 @@ export function EditMappingDialog({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-20 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow-pop focus:outline-none dark:border-slate-800 dark:bg-slate-900">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs" />
+        <Dialog.Content className="fixed left-1/2 top-20 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow-pop focus:outline-hidden dark:border-slate-800 dark:bg-slate-900">
           <Dialog.Title className="text-lg font-semibold text-slate-900 dark:text-slate-100">Edit mapping</Dialog.Title>
           <Dialog.Description className="text-sm text-slate-500 dark:text-slate-400">
             Replace the proposed target field and optionally record why.

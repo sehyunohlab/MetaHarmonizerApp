@@ -78,9 +78,9 @@ export function UnmatchedMappingsCard({
                     return (
                       <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg bg-white px-3 py-2 dark:bg-slate-800/60">
                         <div className="flex min-w-0 flex-1 items-center gap-2">
-                          <code className="rounded bg-slate-100 dark:bg-slate-800/70 px-1.5 py-0.5 text-xs text-slate-700 dark:text-slate-300">{m.raw_value}</code>
+                          <code className="rounded-sm bg-slate-100 dark:bg-slate-800/70 px-1.5 py-0.5 text-xs text-slate-700 dark:text-slate-300">{m.raw_value}</code>
                           {count > 1 && (
-                            <span className="rounded bg-slate-100 dark:bg-slate-800/70 px-1 text-[10px] text-slate-500">×{count}</span>
+                            <span className="rounded-sm bg-slate-100 dark:bg-slate-800/70 px-1 text-[10px] text-slate-500">×{count}</span>
                           )}
                           <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" />
                           <span className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{s.term}</span>
@@ -102,14 +102,14 @@ export function UnmatchedMappingsCard({
                             <button
                               title="Edit before applying"
                               onClick={() => setEditState({ id: m.id, term: s.term, ontId: s.ontId, raw: m.raw_value })}
-                              className="rounded p-1 text-blue-500 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/15 dark:shadow-none"
+                              className="rounded-sm p-1 text-blue-500 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/15 dark:shadow-none"
                             >
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
                             <button
                               title="Dismiss"
                               onClick={() => dismissSuggestion(m)}
-                              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200 dark:shadow-none"
+                              className="rounded-sm p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200 dark:shadow-none"
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>
@@ -153,7 +153,7 @@ export function UnmatchedMappingsCard({
                         key={m.id}
                         title={count > 1 ? `Assign a term to all ${count} occurrences` : 'Assign an ontology term'}
                         onClick={() => setEditState({ id: m.id, term: '', ontId: '', raw: m.raw_value })}
-                        className="group inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 hover:bg-primary-50 hover:text-primary-700 dark:bg-slate-800/70 dark:hover:bg-primary-500/15 dark:hover:text-primary-300"
+                        className="group inline-flex items-center gap-1 rounded-sm bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 hover:bg-primary-50 hover:text-primary-700 dark:bg-slate-800/70 dark:hover:bg-primary-500/15 dark:hover:text-primary-300"
                       >
                         {m.raw_value}
                         {count > 1 && <span className="text-slate-400">×{count}</span>}

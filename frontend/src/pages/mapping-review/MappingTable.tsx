@@ -162,7 +162,7 @@ export function MappingTable({
                     {m.status !== 'accepted' && (
                       <button
                         onClick={() => onAccept(m.id)}
-                        className="p-1 rounded text-green-600 hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-500/15"
+                        className="p-1 rounded-sm text-green-600 hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-500/15"
                         title="Accept"
                       >
                         <Check className="w-4 h-4" />
@@ -171,7 +171,7 @@ export function MappingTable({
                     {m.status !== 'rejected' && (
                       <button
                         onClick={() => onReject(m.id)}
-                        className="p-1 rounded text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-500/15"
+                        className="p-1 rounded-sm text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-500/15"
                         title="Reject"
                       >
                         <X className="w-4 h-4" />
@@ -179,14 +179,14 @@ export function MappingTable({
                     )}
                     <button
                       onClick={() => onOpenEdit(m)}
-                      className="p-1 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-500/15"
+                      className="p-1 rounded-sm text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-500/15"
                       title="Edit"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => onExpandedRowChange(expandedRow === m.id ? null : m.id)}
-                      className="p-1 rounded text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700"
+                      className="p-1 rounded-sm text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700"
                       title="Details"
                     >
                       {expandedRow === m.id ? (
@@ -281,7 +281,7 @@ export function MappingTable({
                           <dd className="text-slate-900 dark:text-slate-100">
                             {m.method || 'N/A'}
                           </dd>
-                          <dt className="text-slate-500 mt-2 dark:text-slate-400">
+                          <dt className="text-slate-500 dark:text-slate-400">
                             Curator Note
                           </dt>
                           <dd className="text-slate-900 dark:text-slate-100">
@@ -289,7 +289,7 @@ export function MappingTable({
                           </dd>
                           {m.reviewed_at && (
                             <>
-                              <dt className="text-slate-500 mt-2 dark:text-slate-400">
+                              <dt className="text-slate-500 dark:text-slate-400">
                                 Reviewed
                               </dt>
                               <dd className="text-slate-900 dark:text-slate-100">

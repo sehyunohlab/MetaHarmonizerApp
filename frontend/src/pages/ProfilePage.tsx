@@ -189,7 +189,7 @@ export default function ProfilePage() {
                   onClick={() => setScope('read')}
                   className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition ${
                     scope === 'read'
-                      ? 'bg-white text-slate-800 shadow-sm ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-100 dark:shadow-none dark:ring-slate-700'
+                      ? 'bg-white text-slate-800 shadow-xs ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-100 dark:shadow-none dark:ring-slate-700'
                       : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                   }`}
                 >
@@ -203,7 +203,7 @@ export default function ProfilePage() {
                   onClick={() => setScope('write')}
                   className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition ${
                     scope === 'write'
-                      ? 'bg-white text-accent-700 shadow-sm ring-1 ring-accent-200 dark:bg-slate-950 dark:text-accent-300 dark:shadow-none dark:ring-accent-500/30'
+                      ? 'bg-white text-accent-700 shadow-xs ring-1 ring-accent-200 dark:bg-slate-950 dark:text-accent-300 dark:shadow-none dark:ring-accent-500/30'
                       : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                   }`}
                 >

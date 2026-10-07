@@ -33,14 +33,14 @@ export function EditOntologyDialog({
     <Dialog.Root open onOpenChange={(open) => !open && closeModal()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
-        <Dialog.Content className="fixed left-1/2 top-20 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 space-y-4 rounded-lg bg-white p-6 shadow-xl focus:outline-none dark:bg-slate-900">
+        <Dialog.Content className="fixed left-1/2 top-20 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 space-y-4 rounded-lg bg-white p-6 shadow-xl focus:outline-hidden dark:bg-slate-900">
           <Dialog.Title className="text-sm font-semibold text-slate-800 dark:text-slate-200">Set ontology term</Dialog.Title>
           <Dialog.Description className="sr-only">
             Assign a controlled-vocabulary term and ontology identifier to this value.
           </Dialog.Description>
           {editState.raw && (
             <p className="text-xs text-slate-500">
-              Assigning a term to <code className="rounded bg-slate-100 dark:bg-slate-800/70 px-1.5 py-0.5 text-slate-700 dark:text-slate-300">{editState.raw}</code>
+              Assigning a term to <code className="rounded-sm bg-slate-100 dark:bg-slate-800/70 px-1.5 py-0.5 text-slate-700 dark:text-slate-300">{editState.raw}</code>
             </p>
           )}
           <div className="space-y-2">
@@ -51,7 +51,7 @@ export function EditOntologyDialog({
               onChange={(e) => setEditState({ ...editState, term: e.target.value })}
               onKeyDown={(e) => e.key === 'Enter' && handleEditSave()}
               placeholder="e.g. Male"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             />
           </div>
           <div className="space-y-2">
@@ -60,7 +60,7 @@ export function EditOntologyDialog({
               value={editState.ontId}
               onChange={(e) => setEditState({ ...editState, ontId: e.target.value })}
               placeholder="e.g. NCIT:C20197"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             />
           </div>
 
