@@ -1,11 +1,16 @@
 name: Engine Upgrade
 
-# Fetch a new upstream engine version, build + vendor its wheel, verify it works
-# against our adapter contract AND the real engine, then open a PR. This is the
-# "upgrade the engine on purpose, with a safety net" workflow — we pin a bundle
-# and bump it deliberately.
+# Build an upstream engine commit into the vendored wheel, verify it against our
+# adapter contract AND the real engine, then open a PR. Engine Watch starts it
+# daily when upstream `main` moves; it can also be started by hand with any ref
+# (commit SHA preferred, or a tag or branch).
 #
-# Manual trigger: pass the upstream ref (commit SHA — preferred — tag, or branch).
+# The PR is opened with the automation GitHub App's token when the
+# AUTOMATION_APP_ID and AUTOMATION_APP_PRIVATE_KEY secrets exist, so the required
+# checks run on it. Otherwise the workflow token opens it; PRs opened that way
+# don't start other workflows, so close and reopen the PR to run its checks.
+
+run-name: Engine Upgrade to ${{ inputs.ref }}
 
 on:
   workflow_dispatch:
@@ -15,22 +20,68 @@ on:
         required: true
         default: "main"
       auto_merge:
-        description: "Squash-merge the bump PR automatically once this job's checks pass"
+        description: "Enable auto-merge on the PR (needs the automation App, so its checks run)"
         type: boolean
         required: false
-        default: true
+        default: false
 
 permissions:
   contents: write # push the bump branch
   pull-requests: write # open the PR
+  issues: write # report a failed upgrade
 
 concurrency:
   group: engine-bump
   cancel-in-progress: false
 
+env:
+  UPSTREAM: https://github.com/shbrief/MetaHarmonizer.git
+  # Upstream paths the KB build depends on (see backend/scripts/build_kb.py).
+  KB_PATHS: '^src/metaharmonizer/(knowledge_db/|scripts/knowledge_db\.py|_bundled_data/corpus/|_paths\.py|engine/ontology_mapping_engine\.py|models/ontology_)'
+
 jobs:
+  resolve:
+    name: Resolve Upstream Ref
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      new: ${{ steps.ref.outputs.new }}
+      old: ${{ steps.ref.outputs.old }}
+      skip: ${{ steps.ref.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Resolve the ref and compare with our pin
+        id: ref
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          BD="$RUNNER_TEMP/upstream"
+          git clone --no-checkout --filter=blob:none "$UPSTREAM" "$BD"
+          NEW=$(git -C "$BD" rev-parse --verify --quiet "${REF}^{commit}" ||
+            git -C "$BD" rev-parse --verify --quiet "origin/${REF}^{commit}" || true)
+          if [ -z "$NEW" ]; then
+            echo "::error::Unknown upstream ref: $REF"
+            exit 1
+          fi
+          OLD=$(grep -v '^#' backend/vendor/ENGINE_REF 2>/dev/null | head -n1 | tr -d '[:space:]' || true)
+          echo "new=$NEW" >> "$GITHUB_OUTPUT"
+          echo "old=$OLD" >> "$GITHUB_OUTPUT"
+          if [ "$NEW" = "$OLD" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Already pinned to \`$NEW\`; nothing to upgrade." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Upgrading the engine from \`${OLD:-unknown}\` to \`$NEW\`." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   bump:
     name: Build and Verify Engine Upgrade
+    needs: resolve
+    if: needs.resolve.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     services:
@@ -54,9 +105,13 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://mh:mh_dev_password@localhost:5432/metaharmonizer
       REDIS_URL: redis://localhost:6379/0
       JWT_SECRET: test-secret-key-at-least-32-bytes-long!!
-      UPSTREAM: https://github.com/shbrief/MetaHarmonizer.git
+      NEW: ${{ needs.resolve.outputs.new }}
+      OLD: ${{ needs.resolve.outputs.old }}
+      HAS_AUTOMATION_APP: ${{ secrets.AUTOMATION_APP_ID != '' }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
 
       - uses: actions/setup-python@v7
         with:
@@ -65,11 +120,10 @@ jobs:
       - name: Build the engine wheel from upstream @ ref
         run: |
           set -euo pipefail
-          REF="${{ github.event.inputs.ref }}"
           BD="$RUNNER_TEMP/mh_build"
           # Sparse checkout of only what the build needs (matches backend/vendor/README.md).
           git clone --no-checkout --filter=blob:none "$UPSTREAM" "$BD"
-          git -C "$BD" checkout "$REF" -- src pyproject.toml README.md
+          git -C "$BD" checkout "$NEW" -- src pyproject.toml README.md
           python -m pip install --upgrade pip build wheel
           python -m pip wheel "$BD" --no-deps -w "$RUNNER_TEMP/mh_wheel"
           ls -l "$RUNNER_TEMP/mh_wheel"
@@ -92,7 +146,7 @@ jobs:
           WHEEL=$(ls "$RUNNER_TEMP"/mh_wheel/metaharmonizer-*-py3-none-any.whl)
           python scripts/strip_unused_nltk_dependency.py --wheel "$WHEEL" --strip
 
-      - name: Vendor the new wheel + update the requirements pin
+      - name: Vendor the new wheel + update the pin
         id: vendor
         run: |
           set -euo pipefail
@@ -101,6 +155,10 @@ jobs:
           rm -f backend/vendor/metaharmonizer-*-py3-none-any.whl
           cp "$WHEEL" "backend/vendor/$BASE"
           sed -i -E "s|^\./vendor/metaharmonizer-.*\.whl|./vendor/$BASE|" backend/requirements.txt
+          printf '%s\n%s\n%s\n' \
+            "# Upstream shbrief/MetaHarmonizer commit the vendored engine wheel is built from." \
+            "# Written by the Engine Upgrade workflow; Engine Watch compares it with upstream main." \
+            "$NEW" > backend/vendor/ENGINE_REF
           echo "wheel=$BASE" >> "$GITHUB_OUTPUT"
 
       - name: Install backend (with the new engine wheel)
@@ -128,33 +186,111 @@ jobs:
           METAHARMONIZER_DATA_DIR: ${{ github.workspace }}/backend/data
         run: pytest tests/integration/test_engine_real.py -q
 
-      - name: Open a PR with the bumped engine wheel
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Describe the upstream changes
         run: |
           set -euo pipefail
-          REF="${{ github.event.inputs.ref }}"
-          BASE="${{ steps.vendor.outputs.wheel }}"
-          if git diff --quiet -- backend/vendor backend/requirements.txt; then
-            echo "engine wheel unchanged for ref $REF — nothing to bump"; exit 0
+          BD="$RUNNER_TEMP/mh_build"
+          NOTES="$RUNNER_TEMP/upstream_changes.md"
+          if [ -n "$OLD" ] && git -C "$BD" merge-base --is-ancestor "$OLD" "$NEW" 2>/dev/null &&
+            DIFF=$(git -C "$BD" diff --no-renames --name-only "$OLD" "$NEW"); then
+            {
+              echo "### Upstream changes"
+              git -C "$BD" log --reverse --date=short --format='- %h %s (%ad)' "$OLD..$NEW" | head -n 50
+            } > "$NOTES"
+            KB_FILES=$(grep -E "$KB_PATHS" <<< "$DIFF" || true)
+          else
+            echo "### Upstream changes" > "$NOTES"
+            echo "The previous pin is unknown or not an ancestor of \`${NEW:0:12}\`, so changes aren't listed." >> "$NOTES"
+            KB_FILES="(unknown range)"
           fi
-          BR="engine-bump/${REF:0:12}"
+          {
+            echo
+            echo "### Knowledge base"
+            if [ -n "$KB_FILES" ]; then
+              echo "Upstream changed code the KB build depends on:"
+              while IFS= read -r file; do echo "- $file"; done <<< "$KB_FILES"
+              echo
+              echo "Merging this PR starts the Knowledge Base Refresh workflow, which rebuilds,"
+              echo "benchmarks and republishes the KB with the new engine."
+            else
+              echo "No KB or corpus code changed upstream, so the published KB is unaffected."
+            fi
+          } >> "$NOTES"
+          cat "$NOTES" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Mint the automation App token
+        id: app
+        if: env.HAS_AUTOMATION_APP == 'true'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+
+      - name: Open the upgrade PR
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
+          WHEEL: ${{ steps.vendor.outputs.wheel }}
+          AUTO_MERGE: ${{ inputs.auto_merge }}
+          BASE: ${{ github.event.repository.default_branch }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          BR="engine-bump/${NEW:0:12}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BR"
           git add backend/vendor backend/requirements.txt
-          git commit -m "chore(engine): bump vendored metaharmonizer wheel to ${REF}"
+          git commit -m "chore(engine): bump vendored metaharmonizer wheel to ${NEW:0:12}"
           git push -u origin "$BR"
-          printf '%s\n\n%s\n' \
-            "Automated engine upgrade to upstream ref \`${REF}\` (wheel \`${BASE}\`)." \
-            "Green in this run: engine import boundary, mock contract suite, and the real-engine schema-mapping smoke. If the ontology corpora changed upstream, run the \`Refresh KB bundle\` workflow too." > "$RUNNER_TEMP/pr_body.md"
-          PR_URL=$(gh pr create --base main --head "$BR" \
-            --title "Bump engine wheel (${BASE})" \
+          {
+            echo "Automated engine upgrade: upstream \`shbrief/MetaHarmonizer\` from \`${OLD:-unknown}\` to \`$NEW\` (wheel \`$WHEEL\`)."
+            echo
+            echo "Green in [the upgrade run]($RUN_URL): engine import boundary, mock contract suite, and the real-engine schema-mapping smoke."
+            echo
+            cat "$RUNNER_TEMP/upstream_changes.md"
+            echo
+            echo "### Checks"
+            if [ "$HAS_AUTOMATION_APP" = "true" ]; then
+              echo "Opened by the automation App, so the required checks run on this PR."
+            else
+              echo "Opened with the workflow token, which doesn't start other workflows."
+              echo "**Close and reopen this PR to run the required checks.**"
+            fi
+            echo
+            echo "Production changes only when an operator deploys the merged commit (docs/release-process.md)."
+          } > "$RUNNER_TEMP/pr_body.md"
+          PR_URL=$(gh pr create --base "$BASE" --head "$BR" \
+            --title "Bump engine to upstream ${NEW:0:12}" \
             --body-file "$RUNNER_TEMP/pr_body.md")
-          echo "Opened $PR_URL"
-          if [ "${{ github.event.inputs.auto_merge }}" = "true" ]; then
-            echo "auto_merge=true -> squash-merging (this job's checks already passed)"
-            gh pr merge "$PR_URL" --squash --delete-branch
+          echo "Opened $PR_URL" | tee -a "$GITHUB_STEP_SUMMARY"
+          gh pr list --state open --json number,headRefName --jq '.[] | "\(.number) \(.headRefName)"' |
+            while read -r number head; do
+              case "$head" in
+                "$BR") ;;
+                engine-bump/*) gh pr close "$number" --delete-branch --comment "Superseded by $PR_URL." || true ;;
+              esac
+            done
+          if [ "$AUTO_MERGE" = "true" ]; then
+            if [ "$HAS_AUTOMATION_APP" = "true" ]; then
+              gh pr merge "$PR_URL" --auto --squash --delete-branch ||
+                echo "::warning::Could not enable auto-merge; is 'Allow auto-merge' on in the repository settings?"
+            else
+              echo "::notice::auto_merge needs the automation App: without it no checks run on the PR."
+            fi
+          fi
+
+      - name: Report a failed upgrade
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          TITLE="Engine upgrade to ${NEW:0:12} failed"
+          BODY="The upgrade to upstream \`$NEW\` failed: $RUN_URL. The pinned engine is unchanged. Engine Watch tries again when upstream moves; start Engine Upgrade by hand to retry this commit."
+          EXISTING=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
           else
-            echo "auto_merge=false -> leaving PR open for manual review"
+            gh issue create --title "$TITLE" --body "$BODY"
           fi

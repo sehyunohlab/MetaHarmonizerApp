@@ -80,13 +80,34 @@ resolved.
 Nothing changes in production automatically. The operator selects the exact
 merged commit and runs the application deployment command.
 
+### Engine upgrades
+
+The engine is a wheel built from an exact upstream `shbrief/MetaHarmonizer`
+commit, recorded in `backend/vendor/ENGINE_REF`. **Engine Watch** checks
+upstream `main` daily. When it has moved, **Engine Upgrade** builds the new
+wheel, runs the engine boundary check, the mock contract suite and the
+real-engine smoke, and opens a PR that lists upstream's changes. Each upstream
+commit gets one automatic attempt; a failed attempt opens an issue. Review and
+merge the PR like any other change, then deploy it as application code.
+
 ### Knowledge-base releases
 
 The KB has a separate automated lifecycle. A scheduled or manually triggered
 workflow builds and benchmarks a candidate bundle, publishes `kb-latest`, and
-opens its checksum update. Production checks the release hourly, stages it in
-new volumes, probes all indexes, switches API/worker, and restores the previous
-volumes if validation fails.
+opens its checksum update. It also runs after an engine upgrade merges if
+upstream changed code the KB build depends on. Production checks the release
+hourly, stages it in new volumes, probes all indexes, switches API/worker, and
+restores the previous volumes if validation fails.
+
+### Automation pull requests
+
+Engine Upgrade and Knowledge Base Refresh open their PRs with the automation
+GitHub App when the `AUTOMATION_APP_ID` and `AUTOMATION_APP_PRIVATE_KEY`
+secrets exist, so the required checks run on them. An organization owner
+creates the App with **Contents** and **Pull requests** read/write access and
+installs it on this repository. Without it, the workflow token opens the PR;
+GitHub doesn't start other workflows for such PRs, so close and reopen the PR
+to run its checks.
 
 ### Admin changes
 

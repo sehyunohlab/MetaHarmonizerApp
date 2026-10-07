@@ -73,16 +73,30 @@ def _hf_hub_root() -> Path:
 
 
 def _copy_hf_hub(source: Path, destination: Path) -> int:
+    """Copy a HuggingFace hub cache tree, keeping its snapshot symlinks.
+
+    The destination may already hold the same model (the KB build downloads
+    it), where ``snapshots/`` entries are symlinks into ``blobs/`` and blobs
+    copied from a bundle can be read-only. Each entry is therefore replaced
+    rather than written through, which would follow the link into a read-only
+    blob and fail with EACCES.
+    """
     if not source.exists():
         print("[graft] WARNING: no hf_hub in source bundle")
         return 0
     copied = 0
-    for item in source.rglob("*"):
-        if not item.is_file():
-            continue
+    for item in sorted(source.rglob("*")):
         target = destination / item.relative_to(source)
+        if item.is_dir() and not item.is_symlink():
+            target.mkdir(parents=True, exist_ok=True)
+            continue
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(item, target)
+        if target.is_symlink() or target.is_file():
+            target.unlink()
+        if item.is_symlink():
+            target.symlink_to(os.readlink(item))
+        else:
+            shutil.copy2(item, target)
         copied += 1
     print(f"[graft] schema model cache: {copied} file(s) -> {destination}")
     return copied
