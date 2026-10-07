@@ -18,19 +18,21 @@ const COUNT_TONE: Record<NonNullable<Segment<string>['tone']>, string> = {
   slate: 'bg-slate-200/70 text-slate-600 dark:bg-slate-600/50 dark:text-slate-300',
 };
 
+// Text and backgrounds keep a 4.5:1 contrast (WCAG AA): emerald, amber and rose
+// use their 700 shades wherever they meet white or the light track.
 const ACTIVE_TONE: Record<NonNullable<Segment<string>['tone']>, string> = {
   primary: 'bg-primary-600 text-white shadow-soft',
-  emerald: 'bg-emerald-600 text-white shadow-soft',
-  amber: 'bg-amber-600 text-white shadow-soft',
-  rose: 'bg-rose-600 text-white shadow-soft',
+  emerald: 'bg-emerald-700 text-white shadow-soft',
+  amber: 'bg-amber-700 text-white shadow-soft',
+  rose: 'bg-rose-700 text-white shadow-soft',
   slate: 'bg-slate-600 text-white shadow-soft',
 };
 
 const INACTIVE_TONE: Record<NonNullable<Segment<string>['tone']>, string> = {
   primary: 'text-primary-600 hover:bg-primary-50 dark:text-primary-300 dark:hover:bg-primary-500/10',
-  emerald: 'text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10',
-  amber: 'text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-500/10',
-  rose: 'text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10',
+  emerald: 'text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10',
+  amber: 'text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-500/10',
+  rose: 'text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10',
   slate: 'text-slate-500 hover:bg-slate-200/60 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700/50 dark:hover:text-slate-100',
 };
 
@@ -81,7 +83,7 @@ export default function SegmentedControl<T extends string>({
               <span
                 className={cn(
                   'rounded-full px-1.5 py-0.5 text-xs font-semibold',
-                  active ? 'bg-white/25 text-white' : COUNT_TONE[s.tone ?? 'primary'],
+                  active ? 'bg-black/20 text-white' : COUNT_TONE[s.tone ?? 'primary'],
                 )}
               >
                 {s.count}

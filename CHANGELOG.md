@@ -21,6 +21,11 @@ versioning once a stable `1.x` release is declared.
   new high-severity npm audit findings (GHSA-vfj7-8cjw-p6xm, GHSA-68fv-2mgg-jv7q)
   without visual changes. The SPA now targets Safari 16.4+, Chrome 111+, and
   Firefox 128+.
+- Raised the contrast of the shared filter tabs (emerald, amber and rose tones
+  and the active count pill) to WCAG AA, and made card and section titles `h2`
+  under the page `h1`, so automated accessibility checks of the review, ontology,
+  admin, profile, activity, upload and export pages report no contrast or
+  heading-order issues in these components.
 - Added a read-only **Preview changes** view to the Export page (and
   `GET /api/v1/export/{study_id}/preview`) that compares the Harmonized CSV with
   the original upload: column renames and drops with their mapping decisions,
