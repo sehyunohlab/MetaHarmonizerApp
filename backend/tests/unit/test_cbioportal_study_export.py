@@ -105,6 +105,39 @@ def test_write_clinical_tsv_header_and_values():
     assert row2[3] == ""  # NaN -> empty, not "nan"
 
 
+def _boolean_spec(raw: str, target: str) -> dict:
+    return {"raw": raw, "target": target, "display": target.title(),
+            "description": target.lower(), "dtype": "BOOLEAN", "priority": 1}
+
+
+def test_boolean_attributes_are_written_as_true_or_false():
+    # cBioPortal's validateData.py accepts only TRUE / FALSE in a BOOLEAN column.
+    raw_df = pd.DataFrame({"samp": list("abcde"), "ffpe": ["Yes", "no", None, "TRUE", "false"]})
+    cols = [
+        exporter._id_spec("SAMPLE_ID", "samp", "Sample Identifier", "Unique sample identifier"),
+        _boolean_spec("ffpe", "FFPE"),
+    ]
+
+    lines = exporter._write_clinical_tsv(cols, raw_df).splitlines()
+
+    assert lines[2] == "#STRING\tBOOLEAN"
+    assert [line.split("\t")[1] for line in lines[5:]] == ["TRUE", "FALSE", "", "TRUE", "FALSE"]
+
+
+def test_a_boolean_column_rewritten_to_other_terms_is_declared_string():
+    raw_df = pd.DataFrame({"samp": ["a", "b"], "pregnant": ["yes", "no"]})
+    cols = [
+        exporter._id_spec("SAMPLE_ID", "samp", "Sample Identifier", "Unique sample identifier"),
+        _boolean_spec("pregnant", "PREGNANT"),
+    ]
+    rewrites = {"PREGNANT": {"yes": "Pregnant", "no": "Not pregnant"}}
+
+    lines = exporter._write_clinical_tsv(cols, raw_df, rewrites).splitlines()
+
+    assert lines[2] == "#STRING\tSTRING"
+    assert [line.split("\t")[1] for line in lines[5:]] == ["Pregnant", "Not pregnant"]
+
+
 def test_banned_checklist_columns_stripped():
     raw_df = pd.DataFrame(
         {

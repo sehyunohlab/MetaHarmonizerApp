@@ -33,6 +33,15 @@ versioning once a stable `1.x` release is declared.
 - Fixed the Harmonized CSV silently reformatting untouched cells: it now keeps
   the uploaded text, so `NA` no longer becomes blank and `51` no longer becomes
   `51.0`.
+- Every export now uses the same column for a schema field: a rejected mapping
+  never fills one, accepted beats pending, then higher confidence, then the
+  column that comes first in the upload. The cBioPortal exports previously
+  ranked by confidence alone, so they could take SAMPLE_ID from a rejected
+  column or a field from an unreviewed suggestion, and ties depended on
+  database order.
+- cBioPortal exports now write yes/no attributes as `TRUE`/`FALSE`, which
+  `validateData.py` requires; the bundled sample metadata failed validation
+  before. The CI validator gate now covers a yes/no column.
 
 ## [0.1.0] - 2026-08-19
 

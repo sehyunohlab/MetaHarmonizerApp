@@ -213,9 +213,14 @@ export anything or mark the study as exported.
 - A column is **Not exported** (left out of the Harmonized CSV) when it is not
   mapped to a schema field, or when another column already maps to the same
   field. A CSV cannot repeat a column name, so one column per field is kept:
-  accepted mappings win, then higher confidence. The preview names the column
-  that was kept, for example `Gender already maps to sex`. To export the other
-  column instead, reject or edit one of the two mappings.
+  accepted mappings win, then higher confidence, then the column that comes
+  first in your file. The cBioPortal files use the same column. The preview
+  names the column that was kept, for example `Gender already maps to sex`. To
+  export the other column instead, reject or edit one of the two mappings.
+- A column whose mapping you **rejected** is never used for a schema field. The
+  Harmonized CSV keeps it unchanged under its own name (**Kept as uploaded**),
+  unless a mapped column is already exported under that name. The cBioPortal
+  files leave it out.
 - **Changed values** shows exported rows next to your upload. Changed cells show
   the exported value with the uploaded value struck through beneath it, colored
   by cause: an accepted ontology term, or an apostrophe added so spreadsheets
@@ -231,7 +236,8 @@ completing the study:
   Every other cell keeps its uploaded text exactly, including number formatting
   and missing-value markers such as `NA`.
 - **cBioPortal Format** is a tab-separated clinical file with cBioPortal header
-  lines.
+  lines. Yes/no columns are written as `TRUE`/`FALSE`, the only values the
+  cBioPortal format accepts for a yes/no attribute.
 - **cBioPortal Study Folder (ZIP)** contains metadata and clinical data files
   for validation/import.
 - **Mapping Report (JSON)** records mapping proposals and curator decisions.

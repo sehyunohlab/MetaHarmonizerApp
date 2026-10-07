@@ -57,6 +57,8 @@ def _sample_study_zip(monkeypatch) -> bytes:
             "os_status": ["LIVING", "LIVING", "DECEASED", "LIVING"],
             "os_months": ["10.5", "10.5", "22.0", "5.0"],
             "sample_type": ["Primary", "Metastasis", "Primary", "Primary"],
+            # yes/no text is typed BOOLEAN, which cBioPortal only accepts as TRUE/FALSE.
+            "ffpe": ["yes", "No", "no", "YES"],
         }
     )
     mappings = [
@@ -66,6 +68,7 @@ def _sample_study_zip(monkeypatch) -> bytes:
         {"raw_column": "os_status", "matched_field": "OS_STATUS", "status": "accepted"},
         {"raw_column": "os_months", "matched_field": "OS_MONTHS", "status": "accepted"},
         {"raw_column": "sample_type", "matched_field": "SAMPLE_TYPE", "status": "accepted"},
+        {"raw_column": "ffpe", "matched_field": "FFPE", "status": "accepted"},
     ]
     _patch_repos(monkeypatch, mappings, {"name": "Validate Test Study"})
     return asyncio.run(exporter.export_cbioportal_study(None, "study1", raw_df))
