@@ -37,7 +37,7 @@ export function MatchedMappingsList({
         {matchedFields.map((field) => (
           <div key={field} className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/80 px-4 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{field}</h3>
+              <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{field}</h2>
               <span className="text-xs text-slate-400">
                 {groupedMatched[field].length} value{groupedMatched[field].length !== 1 ? 's' : ''}
               </span>
