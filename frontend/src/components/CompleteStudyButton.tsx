@@ -51,8 +51,8 @@ export default function CompleteStudyButton({
   const sizeCls = size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm';
   const trigger =
     variant === 'solid'
-      ? `inline-flex shrink-0 items-center gap-2 rounded-full bg-emerald-600 font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-95 disabled:opacity-60 ${sizeCls}`
-      : `group/btn inline-flex shrink-0 items-center gap-2 rounded-full border border-emerald-200 bg-white font-semibold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 hover:shadow active:scale-95 disabled:opacity-60 dark:border-emerald-500/30 dark:bg-slate-900 dark:text-emerald-300 dark:hover:bg-emerald-500/10 ${sizeCls}`;
+      ? `inline-flex shrink-0 items-center gap-2 rounded-full bg-emerald-600 font-semibold text-white shadow-xs transition hover:bg-emerald-700 active:scale-95 disabled:opacity-60 ${sizeCls}`
+      : `group/btn inline-flex shrink-0 items-center gap-2 rounded-full border border-emerald-200 bg-white font-semibold text-emerald-700 shadow-xs transition hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-sm active:scale-95 disabled:opacity-60 dark:border-emerald-500/30 dark:bg-slate-900 dark:text-emerald-300 dark:hover:bg-emerald-500/10 ${sizeCls}`;
 
   return (
     <>

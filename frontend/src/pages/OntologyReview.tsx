@@ -389,14 +389,14 @@ export default function OntologyReview() {
       {editState && <Dialog.Root open onOpenChange={(open) => !open && closeModal()}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
-          <Dialog.Content className="fixed left-1/2 top-20 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 space-y-4 rounded-lg bg-white p-6 shadow-xl focus:outline-none dark:bg-slate-900">
+          <Dialog.Content className="fixed left-1/2 top-20 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 space-y-4 rounded-lg bg-white p-6 shadow-xl focus:outline-hidden dark:bg-slate-900">
             <Dialog.Title className="text-sm font-semibold text-slate-800 dark:text-slate-200">Set ontology term</Dialog.Title>
             <Dialog.Description className="sr-only">
               Assign a controlled-vocabulary term and ontology identifier to this value.
             </Dialog.Description>
             {editState.raw && (
               <p className="text-xs text-slate-500">
-                Assigning a term to <code className="rounded bg-slate-100 dark:bg-slate-800/70 px-1.5 py-0.5 text-slate-700 dark:text-slate-300">{editState.raw}</code>
+                Assigning a term to <code className="rounded-sm bg-slate-100 dark:bg-slate-800/70 px-1.5 py-0.5 text-slate-700 dark:text-slate-300">{editState.raw}</code>
               </p>
             )}
             <div className="space-y-2">
@@ -407,7 +407,7 @@ export default function OntologyReview() {
                 onChange={(e) => setEditState({ ...editState, term: e.target.value })}
                 onKeyDown={(e) => e.key === 'Enter' && handleEditSave()}
                 placeholder="e.g. Male"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               />
             </div>
             <div className="space-y-2">
@@ -416,7 +416,7 @@ export default function OntologyReview() {
                 value={editState.ontId}
                 onChange={(e) => setEditState({ ...editState, ontId: e.target.value })}
                 placeholder="e.g. NCIT:C20197"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               />
             </div>
 
@@ -547,9 +547,9 @@ export default function OntologyReview() {
                             <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                               {rows.map((r, i) => (
                                 <li key={`${r.raw}-${i}`} className="flex flex-wrap items-center gap-2 px-3 py-1.5 text-xs">
-                                  <span className="rounded bg-slate-100 dark:bg-slate-800/70 px-1.5 py-0.5 font-mono text-slate-500 line-through">{r.raw}</span>
+                                  <span className="rounded-sm bg-slate-100 dark:bg-slate-800/70 px-1.5 py-0.5 font-mono text-slate-500 line-through">{r.raw}</span>
                                   <ArrowRight className="h-3 w-3 text-slate-400" />
-                                  <span className="rounded bg-green-50 px-1.5 py-0.5 font-mono font-semibold text-green-700 dark:bg-green-500/15 dark:text-green-300">{r.term}</span>
+                                  <span className="rounded-sm bg-green-50 px-1.5 py-0.5 font-mono font-semibold text-green-700 dark:bg-green-500/15 dark:text-green-300">{r.term}</span>
                                   {r.ontId && <span className="text-[10px] text-slate-400">{r.ontId}</span>}
                                 </li>
                               ))}
@@ -618,7 +618,7 @@ export default function OntologyReview() {
                             <li key={om.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                               {/* raw → term */}
                               <div className="flex min-w-0 flex-1 items-center gap-2">
-                                <code className="rounded bg-slate-100 dark:bg-slate-800/70 px-1.5 py-0.5 text-xs text-slate-700 dark:text-slate-300">{om.raw_value}</code>
+                                <code className="rounded-sm bg-slate-100 dark:bg-slate-800/70 px-1.5 py-0.5 text-xs text-slate-700 dark:text-slate-300">{om.raw_value}</code>
                                 <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" />
                                 <span className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{term}</span>
                                 {om.curator_term && <span className="text-[10px] text-amber-600">(edited)</span>}
@@ -632,19 +632,19 @@ export default function OntologyReview() {
                                 ) : (
                                   <>
                                     {om.status !== 'accepted' && (
-                                      <button title="Accept" onClick={() => handleAccept(om.id)} className="rounded p-1 text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/15 dark:shadow-none">
+                                      <button title="Accept" onClick={() => handleAccept(om.id)} className="rounded-sm p-1 text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/15 dark:shadow-none">
                                         <Check className="h-3.5 w-3.5" />
                                       </button>
                                     )}
                                     {om.status !== 'rejected' && (
-                                      <button title="Reject" onClick={() => handleReject(om.id)} className="rounded p-1 text-rose-500 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/15 dark:shadow-none">
+                                      <button title="Reject" onClick={() => handleReject(om.id)} className="rounded-sm p-1 text-rose-500 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/15 dark:shadow-none">
                                         <X className="h-3.5 w-3.5" />
                                       </button>
                                     )}
                                     <button
                                       title="Edit term"
                                       onClick={() => setEditState({ id: om.id, term: term ?? '', ontId: oid ?? '', raw: om.raw_value })}
-                                      className="rounded p-1 text-blue-500 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/15 dark:shadow-none"
+                                      className="rounded-sm p-1 text-blue-500 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/15 dark:shadow-none"
                                     >
                                       <Pencil className="h-3.5 w-3.5" />
                                     </button>
@@ -698,9 +698,9 @@ export default function OntologyReview() {
                           return (
                             <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg bg-white px-3 py-2 dark:bg-slate-800/60">
                               <div className="flex min-w-0 flex-1 items-center gap-2">
-                                <code className="rounded bg-slate-100 dark:bg-slate-800/70 px-1.5 py-0.5 text-xs text-slate-700 dark:text-slate-300">{m.raw_value}</code>
+                                <code className="rounded-sm bg-slate-100 dark:bg-slate-800/70 px-1.5 py-0.5 text-xs text-slate-700 dark:text-slate-300">{m.raw_value}</code>
                                 {count > 1 && (
-                                  <span className="rounded bg-slate-100 dark:bg-slate-800/70 px-1 text-[10px] text-slate-500">×{count}</span>
+                                  <span className="rounded-sm bg-slate-100 dark:bg-slate-800/70 px-1 text-[10px] text-slate-500">×{count}</span>
                                 )}
                                 <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" />
                                 <span className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{s.term}</span>
@@ -722,14 +722,14 @@ export default function OntologyReview() {
                                   <button
                                     title="Edit before applying"
                                     onClick={() => setEditState({ id: m.id, term: s.term, ontId: s.ontId, raw: m.raw_value })}
-                                    className="rounded p-1 text-blue-500 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/15 dark:shadow-none"
+                                    className="rounded-sm p-1 text-blue-500 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/15 dark:shadow-none"
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
                                   </button>
                                   <button
                                     title="Dismiss"
                                     onClick={() => dismissSuggestion(m)}
-                                    className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200 dark:shadow-none"
+                                    className="rounded-sm p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200 dark:shadow-none"
                                   >
                                     <X className="h-3.5 w-3.5" />
                                   </button>
@@ -773,7 +773,7 @@ export default function OntologyReview() {
                               key={m.id}
                               title={count > 1 ? `Assign a term to all ${count} occurrences` : 'Assign an ontology term'}
                               onClick={() => setEditState({ id: m.id, term: '', ontId: '', raw: m.raw_value })}
-                              className="group inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 hover:bg-primary-50 hover:text-primary-700 dark:bg-slate-800/70 dark:hover:bg-primary-500/15 dark:hover:text-primary-300"
+                              className="group inline-flex items-center gap-1 rounded-sm bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 hover:bg-primary-50 hover:text-primary-700 dark:bg-slate-800/70 dark:hover:bg-primary-500/15 dark:hover:text-primary-300"
                             >
                               {m.raw_value}
                               {count > 1 && <span className="text-slate-400">×{count}</span>}

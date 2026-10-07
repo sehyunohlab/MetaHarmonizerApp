@@ -101,7 +101,7 @@ export default function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        <div className="flex items-center justify-between -mt-1">
+        <div className="flex items-center justify-between">
           <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
             <input
               type="checkbox"

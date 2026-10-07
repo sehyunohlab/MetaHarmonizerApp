@@ -534,6 +534,7 @@ export default function MappingReview() {
           setFilterStatus(status);
           setSelected(new Set());
         }}
+        className="mt-4"
         segments={[
           {
             value: 'pending',
@@ -621,7 +622,7 @@ export default function MappingReview() {
             id="stage-filter"
             value={filterStage}
             onChange={(e) => setFilterStage(e.target.value as FilterStage)}
-            className="text-sm border border-slate-200 rounded-lg px-2 py-1 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="text-sm border border-slate-200 rounded-lg px-2 py-1 focus:border-primary-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           >
             <option value="all">All</option>
             <option value="stage1">S1 Dict/Fuzzy</option>
@@ -640,7 +641,7 @@ export default function MappingReview() {
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search columns"
             placeholder="Search columns…  ( / )"
-            className="w-48 rounded-lg border border-slate-200 py-1 pl-7 pr-2 text-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="w-48 rounded-lg border border-slate-200 py-1 pl-7 pr-2 text-sm focus:border-primary-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           />
         </div>
         {queueStats && (
@@ -660,7 +661,7 @@ export default function MappingReview() {
       </div>
 
       {/* Keyboard hint */}
-      <p className="-mt-2 px-1 text-[11px] text-slate-400">
+      <p className="px-1 text-[11px] text-slate-400">
         Shortcuts: <kbd className="kbd">j</kbd>/<kbd className="kbd">k</kbd> move ·
         <kbd className="kbd">a</kbd> accept · <kbd className="kbd">r</kbd> reject ·
         <kbd className="kbd">e</kbd> edit · <kbd className="kbd">x</kbd> select ·
@@ -753,7 +754,7 @@ export default function MappingReview() {
                         {m.status !== 'accepted' && (
                           <button
                             onClick={() => handleAccept(m.id)}
-                            className="p-1 rounded text-green-600 hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-500/15"
+                            className="p-1 rounded-sm text-green-600 hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-500/15"
                             title="Accept"
                           >
                             <Check className="w-4 h-4" />
@@ -762,7 +763,7 @@ export default function MappingReview() {
                         {m.status !== 'rejected' && (
                           <button
                             onClick={() => handleReject(m.id)}
-                            className="p-1 rounded text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-500/15"
+                            className="p-1 rounded-sm text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-500/15"
                             title="Reject"
                           >
                             <X className="w-4 h-4" />
@@ -770,14 +771,14 @@ export default function MappingReview() {
                         )}
                         <button
                           onClick={() => openEdit(m)}
-                          className="p-1 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-500/15"
+                          className="p-1 rounded-sm text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-500/15"
                           title="Edit"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => setExpandedRow(expandedRow === m.id ? null : m.id)}
-                          className="p-1 rounded text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700"
+                          className="p-1 rounded-sm text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700"
                           title="Details"
                         >
                           {expandedRow === m.id ? (
@@ -872,7 +873,7 @@ export default function MappingReview() {
                               <dd className="text-slate-900 dark:text-slate-100">
                                 {m.method || 'N/A'}
                               </dd>
-                              <dt className="text-slate-500 mt-2 dark:text-slate-400">
+                              <dt className="text-slate-500 dark:text-slate-400">
                                 Curator Note
                               </dt>
                               <dd className="text-slate-900 dark:text-slate-100">
@@ -880,7 +881,7 @@ export default function MappingReview() {
                               </dd>
                               {m.reviewed_at && (
                                 <>
-                                  <dt className="text-slate-500 mt-2 dark:text-slate-400">
+                                  <dt className="text-slate-500 dark:text-slate-400">
                                     Reviewed
                                   </dt>
                                   <dd className="text-slate-900 dark:text-slate-100">
@@ -929,8 +930,8 @@ export default function MappingReview() {
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm" />
-          <Dialog.Content className="fixed left-1/2 top-20 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow-pop focus:outline-none dark:border-slate-800 dark:bg-slate-900">
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs" />
+          <Dialog.Content className="fixed left-1/2 top-20 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow-pop focus:outline-hidden dark:border-slate-800 dark:bg-slate-900">
             <Dialog.Title className="text-lg font-semibold text-slate-900 dark:text-slate-100">Edit mapping</Dialog.Title>
             <Dialog.Description className="text-sm text-slate-500 dark:text-slate-400">
               Replace the proposed target field and optionally record why.
