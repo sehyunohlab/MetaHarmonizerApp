@@ -22,6 +22,8 @@ from app.core.metrics import MetricsMiddleware
 from app.core.sentry import init_sentry
 from app.core.settings import settings
 from app.routers import admin, audit, auth, export, federation, harmonize, health, mappings, ontology, quality, tokens, ws
+from app.routers.deps import api_token_owner_id
+from app.services import engine_status
 
 configure_logging(settings.log_level)
 init_sentry()
@@ -45,14 +47,14 @@ async def lifespan(app: FastAPI):
     # a reproducibility pin. Idempotent: no-op once a current version exists.
     try:
         from app.db.session import SessionLocal
-        from app.engine_adapter import _schema_registry
         from app.repositories import schema_versions as schema_repo
         from app.routers.harmonize import CURATED_PATH
+        from app.services import schema_catalog
 
         # One v1 lineage per installed target schema (gdc / cbioportal / cmd / …),
         # falling back to the default key when no registry is installed.
-        keys = [s["key"] for s in _schema_registry.available_schemas()] or [
-            _schema_registry.default_key()
+        keys = [s["key"] for s in schema_catalog.available_schemas()] or [
+            schema_catalog.default_schema_key()
         ]
         targets = {k: str(CURATED_PATH) for k in keys}
         async with SessionLocal() as db:
@@ -108,7 +110,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(MetricsMiddleware)
 
 # Rate-limit + idempotency (spec §6.4); fail-open if Redis is unavailable.
-install_limits(app)
+install_limits(app, api_token_owner=api_token_owner_id)
 
 # CORS — restricted origins (no wildcards in production) + explicit methods/headers.
 app.add_middleware(
@@ -121,7 +123,7 @@ app.add_middleware(
 
 # Added last so it is outermost: reject before any inner middleware or FastAPI
 # can parse/spool a harmonization multipart body.
-app.add_middleware(EngineReadinessMiddleware)
+app.add_middleware(EngineReadinessMiddleware, readiness_error=engine_status.runtime_asset_error)
 
 # Register routers
 app.include_router(health.router)

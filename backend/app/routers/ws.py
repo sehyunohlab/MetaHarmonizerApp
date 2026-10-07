@@ -17,7 +17,6 @@ import logging
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import current_user, ensure_study_visible, require_role
 from app.core.jobs import (
     get_snapshot,
     job_channel,
@@ -32,6 +31,7 @@ from app.db.models import User
 from app.db.session import get_db
 from app.repositories import jobs as jobs_repo
 from app.repositories import studies as studies_repo
+from app.routers.deps import current_user, ensure_study_visible, require_role
 
 logger = logging.getLogger("app.ws")
 

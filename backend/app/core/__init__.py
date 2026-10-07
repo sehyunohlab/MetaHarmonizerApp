@@ -1,12 +1,10 @@
 """
 Core cross-cutting concerns (no business logic, no engine imports).
 
-Houses what every layer depends on:
-- settings.py   — Pydantic BaseSettings, the single env-var loader (spec §6.5)
-- security.py   — password hashing (argon2id), JWT encode/decode, CSRF helpers
-- logging.py    — structured JSON logging + request_id context
-- errors.py     — unified error envelope + exception handlers (spec §6.1)
-- pagination.py — cursor pagination helper (spec §6.1)
-
-Added incrementally during Sprint 2 (operational contracts) and Sprint 3 (auth).
+Houses what every layer depends on, and imports nothing app-specific — app
+behaviour is injected from app/main.py. Includes settings, security (passwords,
+JWT, API tokens), federation signing, errors + the unified envelope, logging,
+HTTP middleware, rate limits/idempotency, Redis + the job bus (progress,
+cancellation, WebSocket tickets), storage, uploads, metrics, pagination, email,
+and Sentry.
 """

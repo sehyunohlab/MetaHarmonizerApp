@@ -23,13 +23,12 @@ import jwt
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import AuthError, current_user
 from app.core.email import (
     send_admin_new_signup_email,
     send_password_reset_email,
     send_verification_email,
 )
-from app.core.errors import AppError
+from app.core.errors import AppError, AuthError
 from app.core.hibp import password_breach_count
 from app.core.metrics import AUTH_FAILURES
 from app.core.redis import get_redis
@@ -50,6 +49,7 @@ from app.db.models import User
 from app.db.session import get_db
 from app.repositories import sessions as sessions_repo
 from app.repositories import users as users_repo
+from app.routers.deps import current_user
 from app.schemas.auth import (
     ForgotPasswordRequest,
     LoginRequest,

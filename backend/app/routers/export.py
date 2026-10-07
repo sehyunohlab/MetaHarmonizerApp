@@ -14,10 +14,10 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.core.deps import current_user, ensure_study_visible, require_role
 from app.core.storage import get_storage
 from app.db.models import User
 from app.repositories import studies as studies_repo
+from app.routers.deps import current_user, ensure_study_visible, require_role
 from app.services.exporter import (
     export_all_labeled,
     export_cbioportal,

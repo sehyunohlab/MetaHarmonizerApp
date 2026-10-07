@@ -11,11 +11,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import current_user
 from app.core.security import generate_api_token
 from app.db.models import User
 from app.db.session import get_db
 from app.repositories import api_tokens as api_tokens_repo
+from app.routers.deps import current_user
 from app.schemas.auth import ApiTokenCreate, ApiTokenCreated, ApiTokenInfo
 
 router = APIRouter(prefix="/api/v1/tokens", tags=["tokens"])

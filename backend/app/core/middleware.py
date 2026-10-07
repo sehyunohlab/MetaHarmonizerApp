@@ -14,6 +14,7 @@ Registered in app/main.py via ``install_observability``.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -71,10 +72,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 class EngineReadinessMiddleware:
-    """Reject harmonization before Starlette reads a multipart request body."""
+    """Reject harmonization before Starlette reads a multipart request body.
 
-    def __init__(self, app):
+    ``readiness_error`` returns a user-facing reason the engine can't run, or
+    ``None`` when it is ready. app/main.py wires it to the engine-status
+    service, keeping core free of engine imports.
+    """
+
+    def __init__(self, app, readiness_error: Callable[[], str | None]):
         self.app = app
+        self.readiness_error = readiness_error
 
     async def __call__(self, scope, receive, send):
         if (
@@ -82,9 +89,7 @@ class EngineReadinessMiddleware:
             and scope["method"] == "POST"
             and scope["path"] == "/api/v1/harmonize"
         ):
-            from app.engine_adapter._ontology import runtime_asset_error
-
-            if message := runtime_asset_error():
+            if message := self.readiness_error():
                 request_headers = dict(scope.get("headers", []))
                 rid = request_headers.get(b"x-request-id", b"").decode() or (
                     f"req_{uuid.uuid4().hex}"

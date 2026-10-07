@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from app.core.settings import settings
-from app.services import federation as fed
+from app.core import federation_signing as fed
 
 
 def _pub_hex(priv: Ed25519PrivateKey) -> str:
