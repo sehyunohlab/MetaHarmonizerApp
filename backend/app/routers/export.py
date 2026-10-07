@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +18,10 @@ from app.core.storage import get_storage
 from app.db.models import User
 from app.repositories import studies as studies_repo
 from app.routers.deps import current_user, ensure_study_visible, require_role
+from app.schemas.export import ExportPreview
+from app.services.export_preview import UnknownColumnError, build_preview
 from app.services.exporter import (
+    build_harmonized_table,
     export_all_labeled,
     export_cbioportal,
     export_cbioportal_study,
@@ -54,10 +57,19 @@ async def export_all_labeled_endpoint(
     )
 
 
-async def _load_raw_df(
-    db: AsyncSession, study_id: str, user: User, *, mark_export: bool = True
-) -> pd.DataFrame:
-    """Load the original uploaded CSV for a study (owner-scoped)."""
+async def _load_raw_frames(
+    db: AsyncSession,
+    study_id: str,
+    user: User,
+    *,
+    mark_export: bool = True,
+    with_text: bool = False,
+) -> tuple[pd.DataFrame, pd.DataFrame | None]:
+    """Load the original uploaded file for a study (owner-scoped).
+
+    Returns the type-inferred frame and, when ``with_text``, the same file as
+    exact cell text (no number or missing-value parsing).
+    """
     study = ensure_study_visible(await studies_repo.get_study(db, study_id), user)
 
     key = study.get("file_path")
@@ -68,11 +80,25 @@ async def _load_raw_df(
     suffix = Path(key).suffix.lower()
     sep = "\t" if suffix in (".tsv", ".txt") else ","
     # Exporting is the "done" signal — mark the study so it's cleaned up at the
-    # next logout. A pre-export validation check passes ``mark_export=False``.
+    # next logout. Pre-export checks and previews pass ``mark_export=False``.
     if mark_export:
         await studies_repo.mark_exported(db, study_id)
     with storage.local(key) as local_csv:
-        return pd.read_csv(local_csv, sep=sep, low_memory=False)
+        raw_df = pd.read_csv(local_csv, sep=sep, low_memory=False)
+        raw_text = (
+            pd.read_csv(local_csv, sep=sep, dtype=str, keep_default_na=False)
+            if with_text
+            else None
+        )
+    return raw_df, raw_text
+
+
+async def _load_raw_df(
+    db: AsyncSession, study_id: str, user: User, *, mark_export: bool = True
+) -> pd.DataFrame:
+    """Load the original uploaded CSV for a study (owner-scoped)."""
+    raw_df, _ = await _load_raw_frames(db, study_id, user, mark_export=mark_export)
+    return raw_df
 
 
 @router.get("/{study_id}/harmonized")
@@ -82,14 +108,48 @@ async def export_harmonized(
     db: AsyncSession = Depends(get_db),
 ):
     """Export harmonized CSV with renamed columns."""
-    raw_df = await _load_raw_df(db, study_id, user)
-    csv_text = await export_harmonized_csv(db, study_id, raw_df)
+    raw_df, raw_text = await _load_raw_frames(db, study_id, user, with_text=True)
+    csv_text = await export_harmonized_csv(db, study_id, raw_df, raw_text)
     await db.commit()
     return PlainTextResponse(
         content=csv_text,
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={study_id}_harmonized.csv"},
     )
+
+
+@router.get("/{study_id}/preview", response_model=ExportPreview)
+async def export_preview(
+    study_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    changed_only: bool = True,
+    column: str | None = None,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Compare the harmonized CSV with the original upload, cell by cell.
+
+    Read-only: the study is not marked exported. ``changed_only`` keeps rows
+    with at least one changed cell (in ``column`` when given); ``offset`` and
+    ``limit`` page through them.
+    """
+    raw_df, raw_text = await _load_raw_frames(
+        db, study_id, user, mark_export=False, with_text=True
+    )
+    table = await build_harmonized_table(db, study_id, raw_df, raw_text)
+    try:
+        return build_preview(
+            study_id,
+            raw_text,
+            table,
+            offset=offset,
+            limit=limit,
+            changed_only=changed_only,
+            column=column,
+        )
+    except UnknownColumnError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/{study_id}/cbioportal")

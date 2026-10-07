@@ -10,6 +10,8 @@
  * the HTTP layer.
  */
 import type {
+    ExportColumnChange,
+    ExportPreview,
     Mapping,
     OntologyMapping,
     QualityMetrics,
@@ -151,6 +153,157 @@ const demoQuality: QualityMetrics = {
     ],
 };
 
+/* Export preview: the demo study's harmonized CSV vs. its upload. Cell values
+ * are generated deterministically from the row number. */
+
+interface DemoExportColumn {
+    source: string;
+    target: string | null;
+    action: ExportColumnChange['action'];
+    mapping_status: ExportColumnChange['mapping_status'];
+    value: (row: number) => string;
+    rewrite?: Record<string, string>;
+}
+
+const pick = (options: string[], row: number, salt: number) => options[(row * 7 + salt * 5) % options.length];
+
+const exported = (
+    source: string,
+    target: string,
+    value: DemoExportColumn['value'],
+    rewrite?: Record<string, string>,
+    mapping_status: DemoExportColumn['mapping_status'] = 'accepted',
+): DemoExportColumn => ({
+    source,
+    target,
+    action: source === target ? 'matched' : 'renamed',
+    mapping_status,
+    value,
+    rewrite,
+});
+
+const notExported = (source: string, mapping_status: DemoExportColumn['mapping_status']): DemoExportColumn => ({
+    source,
+    target: null,
+    action: 'dropped',
+    mapping_status,
+    value: (row) => String(row),
+});
+
+const demoExportColumns: DemoExportColumn[] = [
+    exported('tumor_site', 'primary_site', () => 'Uterus', { Uterus: 'Corpus uteri' }),
+    exported('Histologic_Type', 'morphology', (r) => pick(['Endometrioid', 'Endometrioid', 'Serous', 'Clear cell'], r, 1), {
+        Endometrioid: 'Endometrioid adenocarcinoma, NOS',
+        Serous: 'Serous adenocarcinoma, NOS',
+        'Clear cell': 'Clear cell adenocarcinoma, NOS',
+    }),
+    exported('FIGO_stage', 'figo_stage', (r) => pick(['IA', 'IB', 'II', 'IIIA', 'IIIC1', 'IVB'], r, 2)),
+    exported('MSI_status', 'msi_status', (r) => pick(['MSS', 'MSS', 'MSI-H'], r, 3)),
+    exported('sex', 'gender', () => 'F', { F: 'female' }),
+    exported('BMI', 'bmi', (r) => (22 + ((r * 37) % 180) / 10).toFixed(1)),
+    exported('vital_status', 'vital_status', (r) => pick(['Living', 'Living', 'Living', 'Deceased'], r, 4), {
+        Living: 'Alive',
+        Deceased: 'Dead',
+    }),
+    exported('race', 'race', (r) => pick(['White', 'White', 'Black or African American', 'Asian', 'Not Reported'], r, 5)),
+    exported('Tumor_Stage_Pathological', 'uicc_pathologic_t', (r) => pick(['pT1a', 'pT1b', 'pT2', 'pT3a'], r, 6)),
+    exported('tobacco_smoking_status', 'tobacco_smoking_status', (r) => pick(['Never', 'Never', 'Former', 'Current'], r, 7), {
+        Never: 'Lifelong Non-Smoker',
+        Former: 'Current Reformed Smoker',
+        Current: 'Current Smoker',
+    }),
+    exported('age', 'age_at_diagnosis', (r) => String(45 + ((r * 11) % 38)), undefined, 'pending'),
+    exported('diagnosis', 'primary_diagnosis', (r) => pick(['Endometrial carcinoma', 'Serous carcinoma'], r, 8), undefined, 'pending'),
+    exported('residual_tumor', 'residual_disease', (r) => pick(['R0', 'R0', 'R1', 'RX'], r, 9), undefined, 'pending'),
+    notExported('TMT_channel', 'pending'),
+    notExported('peptide_ratio_norm', 'pending'),
+    ...['Aliquot_ID', 'Plex', 'Proteomics_Batch', 'Specimen_Volume', 'Shipping_Temperature', 'Freezer_Box', 'QC_flag', 'Run_Date', 'Notes_internal'].map(
+        (source) => notExported(source, 'unmapped'),
+    ),
+];
+
+function demoExportPreview(params: URLSearchParams): ExportPreview {
+    const offset = Math.max(0, Number(params.get('offset') ?? 0) || 0);
+    const limit = Math.max(1, Number(params.get('limit') ?? 50) || 50);
+    const changedOnly = params.get('changed_only') !== 'false';
+    const focus = params.get('column');
+    const outputs = demoExportColumns.filter((c) => c.target !== null);
+    const rowCount = demoStudy.row_count ?? 0;
+
+    const cells = Array.from({ length: rowCount }, (_, r) =>
+        outputs.map((c) => {
+            const before = c.value(r);
+            return { before, after: c.rewrite?.[before] ?? before };
+        }),
+    );
+    const changed = (r: number, j: number) => cells[r][j].before !== cells[r][j].after;
+
+    const columns: ExportColumnChange[] = demoExportColumns.map((c) => {
+        const j = outputs.indexOf(c);
+        const counts = new Map<string, { before: string; after: string; count: number }>();
+        if (j !== -1) {
+            cells.forEach((row) => {
+                const { before, after } = row[j];
+                if (before === after) return;
+                const key = `${before}\u0000${after}`;
+                counts.set(key, { before, after, count: (counts.get(key)?.count ?? 0) + 1 });
+            });
+        }
+        const value_changes = [...counts.values()]
+            .sort((a, b) => b.count - a.count || a.before.localeCompare(b.before))
+            .map((v) => ({ ...v, reason: 'ontology' as const }));
+        return {
+            source: c.source,
+            target: c.target,
+            action: c.action,
+            mapping_status: c.mapping_status,
+            drop_reason: c.target === null ? 'no_target' : null,
+            conflicts_with: null,
+            changed_cells: value_changes.reduce((sum, v) => sum + v.count, 0),
+            value_changes,
+            more_value_changes: 0,
+        };
+    });
+
+    const focusIndex = focus ? outputs.findIndex((c) => c.target === focus) : -1;
+    const lines = cells
+        .map((_, r) => r)
+        .filter((r) => !changedOnly || (focusIndex !== -1 ? changed(r, focusIndex) : outputs.some((_, j) => changed(r, j))));
+    const changedCells = columns.reduce((sum, c) => sum + c.changed_cells, 0);
+    const count = (action: ExportColumnChange['action']) => demoExportColumns.filter((c) => c.action === action).length;
+
+    return {
+        study_id: DEMO_STUDY_ID,
+        summary: {
+            rows: rowCount,
+            columns_before: demoExportColumns.length,
+            columns_after: outputs.length,
+            renamed: count('renamed'),
+            matched: count('matched'),
+            kept: count('kept'),
+            dropped: count('dropped'),
+            pending: outputs.filter((c) => c.mapping_status === 'pending').length,
+            changed_cells: changedCells,
+            changed_rows: cells.filter((_, r) => outputs.some((__, j) => changed(r, j))).length,
+            compared_cells: rowCount * outputs.length,
+        },
+        columns,
+        rows: {
+            total: lines.length,
+            offset,
+            limit,
+            columns: outputs.map((c) => c.target as string),
+            items: lines.slice(offset, offset + limit).map((r) => ({
+                line: r + 1,
+                values: cells[r].map((cell) => cell.after),
+                changes: cells[r].flatMap((cell, j) =>
+                    cell.before !== cell.after ? [{ column: j, before: cell.before, reason: 'ontology' as const }] : [],
+                ),
+            })),
+        },
+    };
+}
+
 /** Return a canned response for a GET while in guest preview, or null if the
  *  path has no fixture (caller then blocks the call). Writes always get null. */
 export function guestFixture(path: string, method: string): { data: unknown } | null {
@@ -169,6 +322,8 @@ export function guestFixture(path: string, method: string): { data: unknown } | 
             return { data: demoOntology };
         case `/quality/${DEMO_STUDY_ID}`:
             return { data: demoQuality };
+        case `/export/${DEMO_STUDY_ID}/preview`:
+            return { data: demoExportPreview(new URLSearchParams(path.split('?')[1] ?? '')) };
         case '/schema-versions':
         case '/target-schemas':
             return { data: [] };

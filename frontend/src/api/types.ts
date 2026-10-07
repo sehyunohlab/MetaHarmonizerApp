@@ -182,3 +182,86 @@ export interface Paginated<T> {
     items: T[];
     next_cursor: string | null;
 }
+
+/* Export preview — harmonized CSV vs. original upload */
+
+export type ExportColumnAction = 'renamed' | 'matched' | 'kept' | 'dropped';
+export type ExportMappingStatus = 'accepted' | 'pending' | 'rejected' | 'unmapped';
+export type ExportDropReason = 'no_target' | 'duplicate_target' | 'name_conflict';
+/** Why a cell differs: ontology term rewrite, or spreadsheet formula escape. */
+export type ExportChangeReason = 'ontology' | 'escaped' | 'other';
+
+export interface ExportPreviewSummary {
+    rows: number;
+    columns_before: number;
+    columns_after: number;
+    renamed: number;
+    matched: number;
+    kept: number;
+    dropped: number;
+    /** Exported columns whose mapping is still awaiting review. */
+    pending: number;
+    changed_cells: number;
+    changed_rows: number;
+    /** rows × exported columns */
+    compared_cells: number;
+}
+
+export interface ExportValueChange {
+    before: string;
+    after: string;
+    count: number;
+    reason: ExportChangeReason;
+}
+
+export interface ExportColumnChange {
+    source: string;
+    /** Export column name; null when the column is not exported. */
+    target: string | null;
+    action: ExportColumnAction;
+    mapping_status: ExportMappingStatus;
+    drop_reason: ExportDropReason | null;
+    /** For a dropped column: the source column that took its export name. */
+    conflicts_with: string | null;
+    changed_cells: number;
+    value_changes: ExportValueChange[];
+    /** Distinct changes beyond those listed in value_changes. */
+    more_value_changes: number;
+}
+
+export interface ExportCellChange {
+    /** Index into ExportPreviewRows.columns */
+    column: number;
+    before: string;
+    reason: ExportChangeReason;
+}
+
+export interface ExportPreviewRow {
+    /** 1-based data row number */
+    line: number;
+    values: string[];
+    changes: ExportCellChange[];
+}
+
+export interface ExportPreviewRows {
+    total: number;
+    offset: number;
+    limit: number;
+    columns: string[];
+    items: ExportPreviewRow[];
+}
+
+export interface ExportPreview {
+    study_id: string;
+    summary: ExportPreviewSummary;
+    columns: ExportColumnChange[];
+    rows: ExportPreviewRows;
+}
+
+export interface ExportPreviewQuery {
+    offset: number;
+    limit: number;
+    changedOnly: boolean;
+    /** Export column to focus on (rows where it changed); null for all. */
+    column: string | null;
+}

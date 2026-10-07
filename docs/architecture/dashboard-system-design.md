@@ -144,7 +144,7 @@ Mounted in [main.py](../../backend/app/main.py); prefixes from each router file:
 | `mappings` | `/api/v1/mappings` | list, **review-queue** (active-learning order), accept/reject/edit, batch |
 | `ontology` | `/api/v1/ontology` | value-mapping review, term **search**, snapshots |
 | `quality` | `/api/v1/quality` | per-study coverage / confidence / stage metrics |
-| `export` | `/api/v1/export` | harmonized CSV, cBioPortal TSV, study ZIP, report JSON, labeled dataset |
+| `export` | `/api/v1/export` | harmonized CSV, **change preview** (read-only diff vs. upload), cBioPortal TSV, study ZIP, report JSON, labeled dataset |
 | `federation` | `/api/v1/federation` | public-key, signed export, verified import (Ed25519) |
 | `audit` | `/api/v1/audit` | append-only activity log query |
 | `ws` | `/api/v1` | WS **ticket** + `/jobs/{study_id}` live progress |
