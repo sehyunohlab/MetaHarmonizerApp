@@ -14,7 +14,11 @@ export const PAGE_SIZE = 50;
 export const ACTION_META: Record<ExportColumnAction, { label: string; tone: BadgeTone; hint: string }> = {
   renamed: { label: 'Renamed', tone: 'primary', hint: 'Exported under its schema field name.' },
   matched: { label: 'Matches schema', tone: 'green', hint: 'Already uses the schema field name.' },
-  kept: { label: 'Kept as uploaded', tone: 'slate', hint: 'Mapping rejected, so the column keeps its original name.' },
+  kept: {
+    label: 'Kept as uploaded',
+    tone: 'slate',
+    hint: 'Mapping rejected, so the column is exported unchanged under its original name.',
+  },
   dropped: { label: 'Not exported', tone: 'rose', hint: 'Left out of the harmonized CSV.' },
 };
 
@@ -49,7 +53,7 @@ export function dropExplanation(column: ExportColumnChange, columns: ExportColum
 export const DROP_REASON_HINT: Record<ExportDropReason, string> = {
   no_target: 'Only columns mapped to a schema field are exported.',
   duplicate_target:
-    'A CSV cannot repeat a column name, so one column per field is exported: accepted mappings win, then higher confidence.',
+    'A CSV cannot repeat a column name, so one column per field is exported: accepted mappings win, then higher confidence, then the first column in your file.',
   name_conflict: 'Its mapping was rejected, but its original name is already used by a mapped column.',
 };
 

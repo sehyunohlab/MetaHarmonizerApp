@@ -14,6 +14,7 @@ import io
 import json
 import re
 import zipfile
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -141,6 +142,13 @@ _SURVIVAL_PREFIX: dict[str, str] = {
     "RECURRED/PROGRESSED": "1:Recurred/Progressed",
 }
 
+# BOOLEAN attribute values must be exactly TRUE or FALSE (validateData.py).
+# Keys are the lower-cased values _infer_dtype types as BOOLEAN.
+_BOOLEAN_TEXT: dict[str, str] = {
+    "true": "TRUE", "yes": "TRUE", "1": "TRUE",
+    "false": "FALSE", "no": "FALSE", "0": "FALSE",
+}
+
 
 # Helpers
 
@@ -179,6 +187,49 @@ def _find_id_column(df: pd.DataFrame, candidates: list[str]) -> str:
 
     # Fallback: use first column
     return df.columns[0] if len(df.columns) > 0 else "_GENERATED_ID"
+
+
+# Column selection (shared by every export)
+
+
+def _mapping_target(mapping: dict[str, Any]) -> str | None:
+    """The schema field a mapping fills in an export, if any.
+
+    An accepted mapping fills the curator's field (else the suggestion) and a
+    pending one its suggestion. A rejected or unmapped column fills nothing,
+    even if it still carries a ``curator_field`` from an earlier edit.
+    """
+    status = mapping.get("status")
+    if status == "accepted":
+        return mapping.get("curator_field") or mapping.get("matched_field") or None
+    if status == "pending":
+        return mapping.get("matched_field") or None
+    return None
+
+
+def _select_sources(
+    mappings: list[dict[str, Any]],
+    columns: Sequence[str],
+    key: Callable[[str], str] | None = None,
+) -> dict[str, tuple[str, str]]:
+    """Choose one source column per schema field: ``{field key: (column, field)}``.
+
+    Accepted beats pending, then higher confidence, then the column that comes
+    first in the upload, so the choice never depends on the order mappings are
+    stored in. ``key`` folds field names that must not repeat in an export
+    (cBioPortal attribute ids).
+    """
+    position = {column: i for i, column in enumerate(columns)}
+    best: dict[str, tuple[tuple[bool, float, int], str, str]] = {}
+    for m in mappings:
+        raw, target = m.get("raw_column"), _mapping_target(m)
+        if raw not in position or not target:
+            continue
+        rank = (m["status"] == "accepted", float(m.get("confidence_score") or 0.0), -position[raw])
+        field_key = key(target) if key else target
+        if field_key not in best or rank > best[field_key][0]:
+            best[field_key] = (rank, raw, target)
+    return {field_key: (raw, target) for field_key, (_rank, raw, target) in best.items()}
 
 
 # Harmonized CSV
@@ -242,33 +293,17 @@ def harmonize_table(
     reformatted. Rewrite lookups use the inferred values, which is how the
     pipeline records an ontology mapping's ``raw_value``.
     """
-    # One source column per target field: accepted beats pending, then higher
-    # confidence wins. Prevents duplicate headers when several source columns
-    # map to the same field — a CSV/cBioPortal file can't carry duplicate
-    # column names, and the losers are near-duplicate suggestions anyway.
-    best_by_target: dict[str, tuple[tuple[int, float], str]] = {}
-    proposed: dict[str, str] = {}
-    for m in mappings:
-        raw = m["raw_column"]
-        if raw not in raw_df.columns:
-            continue
-        status = m["status"]
-        if status == "accepted":
-            target = m.get("curator_field") or m.get("matched_field")
-        elif status == "pending":
-            target = m.get("matched_field")
-        else:  # rejected / unmapped → excluded
-            target = None
-        if not target:
-            continue
-        proposed[raw] = target
-        rank = (1 if status == "accepted" else 0, float(m.get("confidence_score") or 0.0))
-        current = best_by_target.get(target)
-        if current is None or rank > current[0]:
-            best_by_target[target] = (rank, raw)
-
-    rename_map: dict[str, str] = {raw: target for target, (_r, raw) in best_by_target.items()}
-    source_of_target = {target: raw for raw, target in rename_map.items()}
+    # One source column per schema field (see _select_sources): a CSV or
+    # cBioPortal file can't carry duplicate column names, and the losers are
+    # near-duplicate suggestions anyway.
+    winners = _select_sources(mappings, list(raw_df.columns))
+    rename_map: dict[str, str] = {raw: target for raw, target in winners.values()}
+    source_of_target = {target: raw for raw, target in winners.values()}
+    proposed = {
+        m["raw_column"]: target
+        for m in mappings
+        if m["raw_column"] in raw_df.columns and (target := _mapping_target(m))
+    }
     mapped_targets = set(rename_map.values())
     status_by_raw = {m["raw_column"]: m["status"] for m in mappings}
     rejected_raw = {
@@ -307,7 +342,9 @@ def harmonize_table(
 
         text = raw_text[raw]
         hit = pd.Series(False, index=text.index)
-        lookup = value_rewrites.get(target)
+        # Rewrites belong to a field mapping: a kept (rejected) column is
+        # exported as uploaded, even if terms for a field of the same name exist.
+        lookup = value_rewrites.get(target) if action != "kept" else None
         if lookup:
             # Value-level rewrite (U5): replace accepted raw values with their
             # confirmed ontology term. Unmatched values pass through.
@@ -395,31 +432,32 @@ def _infer_dtype(series: pd.Series) -> str:
     return "STRING"
 
 
+def _cbio_id(field: str) -> str:
+    """cBioPortal attribute id for a schema field (``body site`` → ``BODY_SITE``)."""
+    return field.upper().replace(" ", "_")
+
+
 def _clinical_column_specs(
     mappings: list[dict[str, Any]], raw_df: pd.DataFrame
 ) -> list[dict[str, Any]]:
-    """Build cBioPortal column specs from accepted/pending mappings.
+    """Build cBioPortal column specs, in upload order, for the columns chosen to
+    fill a schema field — the same choice as the Harmonized CSV.
 
     Excludes PATIENT_ID / SAMPLE_ID (injected per-file by the caller) and
-    banned auto-populated attributes; dedupes by target column.
+    checklist-banned columns, which can't fill an attribute.
     """
+    allowed = [
+        m
+        for m in mappings
+        if not (target := _mapping_target(m))
+        or not _is_banned(_cbio_id(target), str(m.get("raw_column", "")))
+    ]
+    winners = _select_sources(allowed, list(raw_df.columns), key=_cbio_id)
+    position = {column: i for i, column in enumerate(raw_df.columns)}
     cols: list[dict[str, Any]] = []
-    seen_targets: set[str] = set()
-    for m in mappings:
-        if m["status"] not in ("accepted", "pending"):
+    for target_id, (raw, target) in sorted(winners.items(), key=lambda w: position[w[1][0]]):
+        if target_id in {"PATIENT_ID", "SAMPLE_ID"}:
             continue
-        target = m.get("curator_field") or m.get("matched_field")
-        if not target:
-            continue
-        raw = m["raw_column"]
-        if raw not in raw_df.columns:
-            continue
-        target_id = target.upper().replace(" ", "_")
-        if _is_banned(target_id, raw) or target_id in {"PATIENT_ID", "SAMPLE_ID"}:
-            continue
-        if target_id in seen_targets:
-            continue
-        seen_targets.add(target_id)
         cols.append(
             {
                 "raw": raw,
@@ -452,14 +490,10 @@ def _id_raw_source(
     target_id: str,
     fallback_candidates: list[str],
 ) -> str:
-    """Find the raw column feeding an ID attribute: a matched mapping or a heuristic."""
-    for m in mappings:
-        target = m.get("curator_field") or m.get("matched_field")
-        if not target:
-            continue
-        if target.upper().replace(" ", "_") == target_id and m.get("raw_column") in raw_df.columns:
-            return m["raw_column"]
-    return _find_id_column(raw_df, fallback_candidates)
+    """The column feeding an ID attribute: the column chosen for that field
+    (the same choice as every export), else a name/uniqueness heuristic."""
+    winner = _select_sources(mappings, list(raw_df.columns), key=_cbio_id).get(target_id)
+    return winner[0] if winner else _find_id_column(raw_df, fallback_candidates)
 
 
 def _write_clinical_tsv(
@@ -490,12 +524,7 @@ def _write_clinical_tsv(
             row[0] = "#" + row[0]
         writer.writerow(row)
 
-    _header_row([c["display"] for c in cols])
-    _header_row([c["description"] for c in cols])
-    _header_row([c["dtype"] for c in cols])
-    _header_row([str(c["priority"]) for c in cols])
-    writer.writerow([c["target"] for c in cols])  # attribute IDs (no '#')
-
+    rows: list[list[str]] = []
     for _, row in raw_df.iterrows():
         out_row: list[str] = []
         for c in cols:
@@ -516,7 +545,29 @@ def _write_clinical_tsv(
                     text = str(raw_val)
                     text = lookup.get(text, text) if lookup else text
                     out_row.append(_strip_smart_quotes(text))
-        writer.writerow(out_row)
+        rows.append(out_row)
+
+    # cBioPortal accepts only TRUE / FALSE in a BOOLEAN attribute: write yes/no
+    # and true/false that way, and declare a column holding anything else (for
+    # example, after a value rewrite) as STRING.
+    dtypes = [c["dtype"] for c in cols]
+    for j, dtype in enumerate(dtypes):
+        if dtype != "BOOLEAN":
+            continue
+        values = {r[j].strip().lower() for r in rows if r[j].strip()}
+        if values.issubset(_BOOLEAN_TEXT):
+            for r in rows:
+                if r[j].strip():
+                    r[j] = _BOOLEAN_TEXT[r[j].strip().lower()]
+        else:
+            dtypes[j] = "STRING"
+
+    _header_row([c["display"] for c in cols])
+    _header_row([c["description"] for c in cols])
+    _header_row(dtypes)
+    _header_row([str(c["priority"]) for c in cols])
+    writer.writerow([c["target"] for c in cols])  # attribute IDs (no '#')
+    writer.writerows(rows)
 
     return buf.getvalue()
 
@@ -525,10 +576,7 @@ def _rewrites_by_target(
     field_rewrites: dict[str, dict[str, str]],
 ) -> dict[str, dict[str, str]]:
     """Re-key field-name rewrites to cBioPortal target ids (UPPER_CASE)."""
-    return {
-        field.upper().replace(" ", "_"): lookup
-        for field, lookup in field_rewrites.items()
-    }
+    return {_cbio_id(field): lookup for field, lookup in field_rewrites.items()}
 
 
 async def export_cbioportal(
