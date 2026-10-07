@@ -15,20 +15,22 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import actor_label, current_user, ensure_study_visible, owned_study, require_role
 from app.core.errors import ServiceUnavailableError
-from app.core.queue import enqueue_harmonize, has_capacity
 from app.core.settings import settings
 from app.core.storage import get_storage
 from app.core.uploads import check_upload_size
 from app.db.models import User
 from app.db.session import get_db
-from app.models import HarmonizeAccepted, StudyOut
 from app.repositories import audit as audit_repo
 from app.repositories import jobs as jobs_repo
 from app.repositories import mappings as mappings_repo
 from app.repositories import studies as studies_repo
+from app.routers.deps import actor_label, current_user, ensure_study_visible, owned_study, require_role
+from app.schemas.harmonize import HarmonizeAccepted
+from app.schemas.studies import StudyOut
+from app.services import engine_status, schema_catalog
 from app.services.harmonizer import generate_study_id
+from app.workers.queue import enqueue_harmonize, has_capacity
 
 router = APIRouter(prefix="/api/v1", tags=["harmonize"])
 logger = logging.getLogger("app.harmonize")
@@ -81,7 +83,6 @@ async def _resolve_schema(
 ):
     """Resolve the schema version: explicit id, else the chosen target's current,
     else the bundled curated reference."""
-    from app.engine_adapter import _schema_registry
     from app.repositories import schema_versions as schema_repo
 
     if schema_version_id is not None:
@@ -89,7 +90,7 @@ async def _resolve_schema(
         if chosen is None:
             raise HTTPException(404, f"Schema version {schema_version_id} not found.")
     else:
-        key = target_schema or _schema_registry.default_key()
+        key = target_schema or schema_catalog.default_schema_key()
         chosen = await schema_repo.get_current(db, key)
     curated_path = Path(chosen.source_path) if chosen and chosen.source_path else CURATED_PATH
     if not curated_path.exists():
@@ -155,15 +156,11 @@ async def harmonize_study(
     suffix = _validate_suffix(file.filename)
     onto_cols = [c.strip() for c in (ontology_columns or "").split(",") if c.strip()]
     if mode in ("both", "ontology"):
-        from app.engine_adapter._ontology import runtime_asset_error
-
-        if error := runtime_asset_error():
+        if error := engine_status.runtime_asset_error():
             raise ServiceUnavailableError(error)
 
     # Validate the curator's chosen target schema (GDC / cBioPortal / cMD / …).
-    from app.engine_adapter import _schema_registry
-
-    if target_schema and not _schema_registry.is_valid(target_schema):
+    if target_schema and not schema_catalog.is_valid_schema(target_schema):
         raise HTTPException(400, f"Unknown target schema '{target_schema}'.")
 
     # Backpressure: refuse before doing any work (upload/parse) when the queue is full.
@@ -320,9 +317,7 @@ async def list_engine_target_schemas(
     """Target schemas the engine can map into (GDC / cBioPortal / cMD / …), for
     the upload picker. Reads the installed SchemaRegistry artifacts — no engine
     import, so it's cheap even on a cold server."""
-    from app.engine_adapter import _schema_registry
-
-    return _schema_registry.available_schemas()
+    return schema_catalog.available_schemas()
 
 
 @router.get("/harmonize/{job_id}")

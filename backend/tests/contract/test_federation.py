@@ -97,7 +97,7 @@ async def fed_app(database_url):
         await s.commit()
 
     from fastapi import FastAPI
-    from app.core.deps import current_user
+    from app.routers.deps import current_user
     from app.core.middleware import install_observability
     from app.routers import federation
 

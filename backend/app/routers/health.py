@@ -11,8 +11,9 @@ import os
 
 from fastapi import APIRouter, Depends, Response, status
 
-from app.core.deps import require_role
 from app.core.metrics import render_metrics
+from app.routers.deps import require_role
+from app.services import engine_status
 
 router = APIRouter(tags=["health"])
 
@@ -61,12 +62,9 @@ async def _check_redis() -> tuple[bool, str]:
 
 
 def _check_ontology_kb() -> tuple[bool, str]:
-    from app.engine_adapter._ontology import runtime_asset_issues
-    from app.engine_adapter.kb_assets import runtime_engine_required
-
-    if not runtime_engine_required():
+    if not engine_status.runtime_engine_required():
         return True, "disabled"
-    issues = runtime_asset_issues()
+    issues = engine_status.runtime_asset_issues()
     if issues:
         return False, f"error: incomplete ({len(issues)} required asset(s) missing)"
     return True, "ok"

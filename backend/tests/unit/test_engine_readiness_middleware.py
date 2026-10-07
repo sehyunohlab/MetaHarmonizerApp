@@ -4,6 +4,7 @@ import asyncio
 
 from app.core.middleware import EngineReadinessMiddleware
 from app.engine_adapter import _ontology
+from app.services import engine_status
 
 
 def test_unready_engine_rejects_before_receiving_body(monkeypatch) -> None:
@@ -30,7 +31,11 @@ def test_unready_engine_rejects_before_receiving_body(monkeypatch) -> None:
         "path": "/api/v1/harmonize",
         "headers": [],
     }
-    asyncio.run(EngineReadinessMiddleware(downstream)(scope, receive, send))
+    asyncio.run(
+        EngineReadinessMiddleware(
+            downstream, readiness_error=engine_status.runtime_asset_error
+        )(scope, receive, send)
+    )
 
     assert not received
     assert not downstream_called
@@ -56,7 +61,9 @@ def test_ready_engine_passes_request_to_application(monkeypatch) -> None:
         "headers": [],
     }
     asyncio.run(
-        EngineReadinessMiddleware(downstream)(
+        EngineReadinessMiddleware(
+            downstream, readiness_error=engine_status.runtime_asset_error
+        )(
             scope,
             lambda: None,
             lambda _message: None,

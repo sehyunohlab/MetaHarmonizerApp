@@ -13,12 +13,12 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import federation_signing as fed_sig
 from app.db.models import (
     FederationImport,
     FederationMapping,
     LearnedDecision,
 )
-from app.services import federation as fed_sig
 
 
 def _dedup_key(record_type: str, raw_key: str, target: str, ontology_id: str | None) -> str:

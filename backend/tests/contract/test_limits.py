@@ -17,6 +17,7 @@ from app.core.limits import install_limits
 from app.core.middleware import install_observability
 from app.core.security import create_access_token
 from app.core.settings import settings
+from app.routers.deps import api_token_owner_id
 
 pytestmark = pytest.mark.asyncio
 
@@ -54,7 +55,7 @@ async def _redis_clean():
 def _app() -> FastAPI:
     app = FastAPI()
     install_observability(app)
-    install_limits(app)
+    install_limits(app, api_token_owner=api_token_owner_id)
     calls = {"n": 0}
 
     @app.get("/ping")

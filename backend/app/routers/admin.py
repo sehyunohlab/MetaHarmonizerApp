@@ -2,7 +2,7 @@
 Admin router (Sprint 3, slice 3) — user management, RBAC-protected.
 
 Every endpoint here requires the ``admin`` role via ``require_role("admin")``,
-which demonstrates the role-based access control built in ``app.core.deps``.
+which demonstrates the role-based access control built in ``app.routers.deps``.
 When ``AUTH_MODE=none`` the dependency yields a synthetic admin, so these
 routes remain reachable for local development.
 """
@@ -14,15 +14,12 @@ import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import ForbiddenError, actor_label, require_role
 from app.core.email import send_account_approved_email, send_account_rejected_email
-from app.core.errors import NotFoundError
+from app.core.errors import ForbiddenError, NotFoundError
 from app.db.models import SchemaVersion, User
 from app.db.session import get_db
 from app.repositories import audit as audit_repo
@@ -30,7 +27,15 @@ from app.repositories import learned_decisions as ld_repo
 from app.repositories import schema_versions as schema_repo
 from app.repositories import sessions as sessions_repo
 from app.repositories import users as users_repo
+from app.routers.deps import actor_label, require_role
+from app.schemas.admin import (
+    AliasEntry,
+    PromoteRequest,
+    ReviewLearnedRequest,
+    UnpromoteLearnedRequest,
+)
 from app.schemas.auth import ActiveUpdate, RoleUpdate, UserOut
+from app.services import schema_catalog
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -265,11 +270,9 @@ async def upload_schema_version(
     """Upload a new curated-fields CSV as a new version of a target schema
     (never an overwrite). Optionally promote it to that target's current in the
     same call."""
-    from app.engine_adapter import _schema_registry
-
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="A .csv file is required.")
-    if not _schema_registry.is_valid(target_schema):
+    if not schema_catalog.is_valid_schema(target_schema):
         raise HTTPException(
             status_code=400, detail=f"Unknown target schema '{target_schema}'."
         )
@@ -364,9 +367,7 @@ async def upload_schema_aliases(
     out = pd.DataFrame(rows, columns=["source", "field_name"]).drop_duplicates()
     out.to_csv(ALIAS_FILE, index=False)
 
-    from app.engine_adapter import schema_dicts
-
-    schema_dicts._invalidate()  # rebuild merged dict + engine on next harmonize
+    schema_catalog.invalidate_aliases()  # rebuild merged dict + engine on next harmonize
     await audit_repo.add_audit_entry(
         db, study_id=None, action="schema_alias_upload",
         new_value=f"{len(out)} aliases / {out['field_name'].nunique()} fields",
@@ -383,9 +384,7 @@ async def upload_schema_aliases(
 @router.get("/schema-fields")
 async def list_schema_fields(_admin: User = Depends(require_role("admin"))) -> dict:
     """Valid target field names for the active schema (for alias validation)."""
-    from app.engine_adapter import schema_dicts
-
-    return {"fields": schema_dicts.schema_field_names()}
+    return {"fields": schema_catalog.schema_field_names()}
 
 
 @router.get("/schema-aliases/entries")
@@ -396,28 +395,19 @@ async def list_alias_entries(
 ) -> dict:
     """Search the merged alias dictionary (built-in + admin). Built-in rows are
     read-only; admin rows can be removed."""
-    from app.engine_adapter import schema_dicts
-
-    return schema_dicts.alias_entries(q, min(max(limit, 1), 2000))
-
-
-class _AliasEntry(BaseModel):
-    source: str
-    field_name: str
+    return schema_catalog.alias_entries(q, min(max(limit, 1), 2000))
 
 
 @router.post("/schema-aliases/entry", status_code=201)
 async def add_alias_entry(
-    body: _AliasEntry,
+    body: AliasEntry,
     admin: User = Depends(require_role("admin")),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Manually add one alias (nickname → canonical field)."""
-    from app.engine_adapter import schema_dicts
-
     try:
-        schema_dicts.add_alias(body.source, body.field_name)
-    except schema_dicts.AliasExists as exc:
+        schema_catalog.add_alias(body.source, body.field_name)
+    except schema_catalog.AliasExistsError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
@@ -439,10 +429,8 @@ async def export_alias_dict(
     or ``scope=custom`` (admin-added only)."""
     from fastapi import Response
 
-    from app.engine_adapter import schema_dicts
-
     scope = scope if scope in ("merged", "custom") else "merged"
-    csv_text = schema_dicts.export_csv(scope)
+    csv_text = schema_catalog.export_aliases_csv(scope)
     return Response(
         content=csv_text,
         media_type="text/csv",
@@ -458,9 +446,7 @@ async def delete_alias_entry(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Remove one admin alias (built-ins cannot be removed)."""
-    from app.engine_adapter import schema_dicts
-
-    if not schema_dicts.remove_alias(source, field_name):
+    if not schema_catalog.remove_alias(source, field_name):
         raise HTTPException(
             status_code=404,
             detail="Alias not found in the admin layer (built-ins can't be removed).",
@@ -527,24 +513,6 @@ async def diff_schema_versions(
 
 
 # ── Two-layer curation KB promotion (ADR-0002, Q10 two-stage approval) ────────
-class PromoteRequest(BaseModel):
-    kind: str          # 'schema' | 'ontology'
-    source_key: str
-    decision: str      # 'accept' | 'reject'
-    target_field: str | None = None
-    target_term: str | None = None
-    target_id: str | None = None
-
-
-class ReviewLearnedRequest(BaseModel):
-    action: Literal["promote", "dismiss"]
-    candidates: list[PromoteRequest]
-
-
-class UnpromoteLearnedRequest(BaseModel):
-    ids: list[int]
-
-
 @router.get("/learned-decisions/candidates")
 async def learned_promotion_candidates(
     min_support: int = 1,

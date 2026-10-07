@@ -43,7 +43,7 @@ async def app_and_study(database_url):
     # Build the app after the session factory is patched.
     from fastapi import FastAPI
     from app.core.middleware import install_observability
-    from app.core.deps import current_user
+    from app.routers.deps import current_user
     from app.db.models import User
     from app.routers import audit
 

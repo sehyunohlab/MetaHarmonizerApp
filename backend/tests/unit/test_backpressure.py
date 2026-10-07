@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.core import queue as q
+from app.workers import queue as q
 from app.core.errors import ServiceUnavailableError
 
 

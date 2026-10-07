@@ -25,6 +25,7 @@ import json
 import logging
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 
 import jwt
 from fastapi import Request
@@ -33,10 +34,14 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.errors import error_envelope
 from app.core.redis import get_redis
-from app.core.security import API_TOKEN_PREFIX, decode_token, hash_api_token
+from app.core.security import API_TOKEN_PREFIX, decode_token
 from app.core.settings import settings
 
 logger = logging.getLogger("app.ratelimit")
+
+# Resolves a personal API token to its owner's user id (None if not active).
+ApiTokenOwner = Callable[[str], Awaitable[int | None]]
+
 IDEMPOTENCY_HEADER = "Idempotency-Key"
 IDEMPOTENT_ROUTES = ("/studies", "/harmonize", "/federation/import")
 IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60
@@ -57,7 +62,9 @@ RATE_LIMIT_EXEMPT_PREFIXES = (
 )
 
 
-async def _client_id(request: Request) -> tuple[str, bool]:
+async def _client_id(
+    request: Request, api_token_owner: ApiTokenOwner | None
+) -> tuple[str, bool]:
     """Return (identity, is_authenticated). User id when available, else IP."""
     user = getattr(request.state, "user_id", None)
     if user:
@@ -67,13 +74,9 @@ async def _client_id(request: Request) -> tuple[str, bool]:
     if auth.startswith("Bearer "):
         token = auth[7:]
         if token.startswith(API_TOKEN_PREFIX):
-            from app.db.session import SessionLocal
-            from app.repositories import api_tokens as api_tokens_repo
-
-            async with SessionLocal() as db:
-                record = await api_tokens_repo.get_active_by_hash(db, hash_api_token(token))
-            if record is not None:
-                return f"user:{record.user_id}", True
+            owner_id = await api_token_owner(token) if api_token_owner else None
+            if owner_id is not None:
+                return f"user:{owner_id}", True
         else:
             try:
                 payload = decode_token(token)
@@ -90,8 +93,12 @@ async def _client_id(request: Request) -> tuple[str, bool]:
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, api_token_owner: ApiTokenOwner | None = None) -> None:
+        super().__init__(app)
+        self.api_token_owner = api_token_owner
+
     async def dispatch(self, request: Request, call_next):
-        identity, is_auth = await _client_id(request)
+        identity, is_auth = await _client_id(request, self.api_token_owner)
         if request.url.path.startswith(RATE_LIMIT_EXEMPT_PREFIXES):
             if is_auth:
                 now = time.time()
@@ -213,8 +220,9 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         )
 
 
-def install_limits(app) -> None:
+def install_limits(app, *, api_token_owner: ApiTokenOwner | None) -> None:
     """Attach rate-limit + idempotency middleware (registered inside the
-    request-id scope set by install_observability)."""
+    request-id scope set by install_observability). ``api_token_owner`` maps a
+    personal API token to its owner so token callers are limited per user."""
     app.add_middleware(IdempotencyMiddleware)
-    app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(RateLimitMiddleware, api_token_owner=api_token_owner)

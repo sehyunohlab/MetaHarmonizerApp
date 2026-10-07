@@ -9,20 +9,20 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from rapidfuzz import fuzz, process
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import (
-    actor_label as _actor_label,
-    ensure_study_visible,
-    owned_study,
-    require_role,
-)
 from app.db.models import OntologyMapping
 from app.db.session import get_db
-from app.models import OntologyEditRequest, OntologyMappingOut, OntologySearchResult
 from app.repositories import audit as audit_repo
 from app.repositories import learned_decisions as ld_repo
 from app.repositories import ontology as ontology_repo
 from app.repositories import ontology_snapshots as onto_snap_repo
 from app.repositories import studies as studies_repo
+from app.routers.deps import (
+    actor_label as _actor_label,
+    ensure_study_visible,
+    owned_study,
+    require_role,
+)
+from app.schemas.ontology import OntologyEditRequest, OntologyMappingOut, OntologySearchResult
 from app.services.harmonizer import ONTOLOGY_MAP, _STATIC_NCIT, _load_field_value_dict
 
 router = APIRouter(prefix="/api/v1/ontology", tags=["ontology"])

@@ -12,12 +12,12 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import actor_label, require_role
+from app.core import federation_signing as fed_sig
 from app.db.models import User
 from app.db.session import get_db
 from app.repositories import audit as audit_repo
 from app.repositories import federation as fed_repo
-from app.services import federation as fed_sig
+from app.routers.deps import actor_label, require_role
 
 router = APIRouter(prefix="/api/v1/federation", tags=["federation"])
 

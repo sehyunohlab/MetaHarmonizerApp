@@ -72,15 +72,6 @@ export interface QualityMetrics {
     confidence_distribution: ConfidenceBucket[];
 }
 
-export interface HarmonizeResponse {
-    job_id: string;
-    status: string;
-    study_name: string;
-    row_count: number;
-    column_count: number;
-    message: string;
-}
-
 /** 202 response from the async harmonize endpoint. */
 export interface HarmonizeAccepted {
     job_id: number;

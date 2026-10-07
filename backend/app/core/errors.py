@@ -34,6 +34,16 @@ class NotFoundError(AppError):
     status_code = 404
 
 
+class AuthError(AppError):
+    code = "AUTH_FAILED"
+    status_code = 401
+
+
+class ForbiddenError(AppError):
+    code = "FORBIDDEN"
+    status_code = 403
+
+
 class ValidationError(AppError):
     code = "VALIDATION_ERROR"
     status_code = 422
