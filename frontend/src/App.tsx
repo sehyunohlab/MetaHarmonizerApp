@@ -174,7 +174,7 @@ function AppLayout({ children }: { children: ReactNode }) {
 
       <TopNav />
       {isGuest && (
-        <div className="sticky top-16 z-30 flex flex-wrap items-center justify-center gap-x-1.5 border-b border-amber-200 bg-amber-50/95 px-4 py-2 text-center text-xs font-medium text-amber-900 backdrop-blur dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+        <div className="sticky top-16 z-30 flex flex-wrap items-center justify-center gap-x-1.5 border-b border-amber-200 bg-amber-50/95 px-4 py-2 text-center text-xs font-medium text-amber-900 backdrop-blur-sm dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
           <span>Preview mode — no account, read-only.</span>
           <button
             type="button"

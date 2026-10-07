@@ -32,11 +32,11 @@ export default function UserMenu() {
 
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger aria-label="Account menu" className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white py-1.5 pl-1.5 pr-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 data-[state=open]:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:data-[state=open]:bg-slate-800">
+      <DropdownMenu.Trigger aria-label="Account menu" className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white py-1.5 pl-1.5 pr-2.5 text-sm font-medium text-slate-700 shadow-xs transition hover:bg-slate-50 data-[state=open]:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:data-[state=open]:bg-slate-800">
         <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-600 text-white">
           <UserIcon className="h-4 w-4" />
         </span>
-        <span className="hidden max-w-[10rem] truncate sm:block">{user.name || user.email}</span>
+        <span className="hidden max-w-40 truncate sm:block">{user.name || user.email}</span>
         <ChevronDown className="h-4 w-4 text-slate-400" />
       </DropdownMenu.Trigger>
 
@@ -107,7 +107,7 @@ function Item({
   return (
     <DropdownMenu.Item
       onSelect={onSelect}
-      className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 outline-none transition focus:bg-slate-100 dark:text-slate-200 dark:focus:bg-slate-800 ${className}`}
+      className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 outline-hidden transition focus:bg-slate-100 dark:text-slate-200 dark:focus:bg-slate-800 ${className}`}
     >
       {icon}
       {children}

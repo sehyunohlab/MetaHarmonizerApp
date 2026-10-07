@@ -17,6 +17,10 @@ versioning once a stable `1.x` release is declared.
   the real deployment validation gates; and fixed authenticated browser downloads.
 - Added a documented developer-to-production release process and a backup-first,
   exact-revision routine deployment command with automatic image rollback.
+- Upgraded the dashboard to Tailwind CSS 4 and patched `source-map-js`, clearing
+  new high-severity npm audit findings (GHSA-vfj7-8cjw-p6xm, GHSA-68fv-2mgg-jv7q)
+  without visual changes. The SPA now targets Safari 16.4+, Chrome 111+, and
+  Firefox 128+.
 
 ## [0.1.0] - 2026-08-19
 

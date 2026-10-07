@@ -153,7 +153,7 @@ export default function AdminPage() {
           else next.set('tab', tab);
           setSearchParams(next);
         }}
-        className="w-full overflow-x-auto"
+        className="mt-6 w-full overflow-x-auto"
         segments={[
           {
             value: 'users',
@@ -239,7 +239,7 @@ export default function AdminPage() {
                   <p className="flex items-center gap-1.5 truncate text-xs text-slate-500">
                     {u.email}
                     {u.admin_requested && (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                      <span className="rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
                         also requested admin
                       </span>
                     )}
@@ -311,7 +311,7 @@ export default function AdminPage() {
                           value={u.role}
                           disabled={isSelf || roleM.isPending}
                           onChange={(e) => roleM.mutate({ id: u.id, role: e.target.value as Role })}
-                          className="field !w-auto !py-1.5 text-xs disabled:opacity-60"
+                          className="field w-auto! py-1.5! text-xs disabled:opacity-60"
                         >
                           {ROLES.map((r) => (
                             <option key={r} value={r}>
@@ -629,7 +629,7 @@ function SchemaVersionsCard() {
               setToId(null);
               setDiff(null);
             }}
-            className="mt-1 rounded border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            className="mt-1 rounded-sm border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
           >
             {engineSchemas.data?.map((s) => (
               <option key={s.key} value={s.key}>{s.label}</option>
@@ -654,7 +654,7 @@ function SchemaVersionsCard() {
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="e.g. v2"
-              className="mt-1 w-28 rounded border border-slate-200 px-2 py-1.5 text-sm focus:border-primary-400 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              className="mt-1 w-28 rounded-sm border border-slate-200 px-2 py-1.5 text-sm focus:border-primary-400 focus:outline-hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             />
           </div>
           <div>
@@ -667,7 +667,7 @@ function SchemaVersionsCard() {
               type="file"
               accept=".csv"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="mt-1 text-sm file:mr-2 file:rounded file:border-0 file:bg-primary-50 file:px-2 file:py-1 file:text-primary-700 dark:file:bg-primary-500/15 dark:file:text-primary-300"
+              className="mt-1 text-sm file:mr-2 file:rounded-sm file:border-0 file:bg-primary-50 file:px-2 file:py-1 file:text-primary-700 dark:file:bg-primary-500/15 dark:file:text-primary-300"
             />
           </div>
           <Button
@@ -728,7 +728,7 @@ function SchemaVersionsCard() {
                 aria-label="From version"
                 value={fromId ?? ''}
                 onChange={(e) => setFromId(Number(e.target.value) || null)}
-                className="rounded border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                className="rounded-sm border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
               >
                 <option value="">From…</option>
                 {versions.data!.map((v) => (
@@ -740,7 +740,7 @@ function SchemaVersionsCard() {
                 aria-label="To version"
                 value={toId ?? ''}
                 onChange={(e) => setToId(Number(e.target.value) || null)}
-                className="rounded border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                className="rounded-sm border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
               >
                 <option value="">To…</option>
                 {versions.data!.map((v) => (
@@ -770,7 +770,7 @@ function SchemaVersionsCard() {
                     <span className="text-xs font-semibold text-emerald-700">Added fields</span>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {diff.added_fields.map((f) => (
-                        <span key={f.field} className="rounded bg-emerald-50 px-1.5 py-0.5 font-mono text-xs text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                        <span key={f.field} className="rounded-sm bg-emerald-50 px-1.5 py-0.5 font-mono text-xs text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
                           {f.field}
                         </span>
                       ))}
@@ -782,7 +782,7 @@ function SchemaVersionsCard() {
                     <span className="text-xs font-semibold text-red-700">Removed fields</span>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {diff.removed_fields.map((f) => (
-                        <span key={f.field} className="rounded bg-red-50 px-1.5 py-0.5 font-mono text-xs text-red-700 line-through dark:bg-red-500/15 dark:text-red-300">
+                        <span key={f.field} className="rounded-sm bg-red-50 px-1.5 py-0.5 font-mono text-xs text-red-700 line-through dark:bg-red-500/15 dark:text-red-300">
                           {f.field}
                         </span>
                       ))}
@@ -905,7 +905,7 @@ function LearnedDecisionsCard() {
             type="button"
             onClick={() => { candidates.refetch(); shared.refetch(); }}
             disabled={candidates.isFetching || shared.isFetching}
-            className="inline-flex items-center gap-1.5 rounded border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            className="inline-flex items-center gap-1.5 rounded-sm border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
             title="Refresh the queue and agreement stats (another admin may have promoted something)"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${candidates.isFetching || shared.isFetching ? 'animate-spin' : ''}`} />
@@ -1360,7 +1360,7 @@ function AliasDictCard() {
               type="file"
               accept=".csv,.tsv,.txt"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="mt-1 text-sm file:mr-2 file:rounded file:border-0 file:bg-primary-50 file:px-2 file:py-1 file:text-primary-700 dark:file:bg-primary-500/15 dark:file:text-primary-300"
+              className="mt-1 text-sm file:mr-2 file:rounded-sm file:border-0 file:bg-primary-50 file:px-2 file:py-1 file:text-primary-700 dark:file:bg-primary-500/15 dark:file:text-primary-300"
             />
           </div>
           <Button type="submit" loading={uploadM.isPending} disabled={!file} icon={<Upload className="h-4 w-4" />}>
@@ -1385,7 +1385,7 @@ function AliasDictCard() {
               value={addSource}
               onChange={(e) => setAddSource(e.target.value)}
               placeholder="e.g. patient_sex"
-              className="mt-1 w-40 rounded border border-slate-200 px-2 py-1.5 text-sm focus:border-primary-400 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              className="mt-1 w-40 rounded-sm border border-slate-200 px-2 py-1.5 text-sm focus:border-primary-400 focus:outline-hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             />
           </div>
           <div>
@@ -1398,7 +1398,7 @@ function AliasDictCard() {
               value={addField}
               onChange={(e) => setAddField(e.target.value)}
               placeholder="e.g. sex"
-              className={`mt-1 w-40 rounded border px-2 py-1.5 text-sm focus:outline-none dark:bg-slate-900 dark:text-slate-200 ${
+              className={`mt-1 w-40 rounded border px-2 py-1.5 text-sm focus:outline-hidden dark:bg-slate-900 dark:text-slate-200 ${
                 unknownField ? 'border-amber-400' : 'border-slate-200 focus:border-primary-400 dark:border-slate-700'
               }`}
             />
@@ -1432,7 +1432,7 @@ function AliasDictCard() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search aliases or fields…"
-                className="w-full rounded border border-slate-200 py-1.5 pl-8 pr-2 text-sm focus:border-primary-400 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                className="w-full rounded-sm border border-slate-200 py-1.5 pl-8 pr-2 text-sm focus:border-primary-400 focus:outline-hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
               />
             </div>
             <button
@@ -1440,7 +1440,7 @@ function AliasDictCard() {
               onClick={() =>
                 adminExportAliases('merged').catch(() => toast.error('Export failed'))
               }
-              className="inline-flex items-center gap-1.5 rounded border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              className="inline-flex items-center gap-1.5 rounded-sm border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
               title="Download the full (built-in + custom) alias dictionary as CSV"
             >
               <Download className="h-4 w-4" />
@@ -1451,7 +1451,7 @@ function AliasDictCard() {
               onClick={() =>
                 adminExportAliases('custom').catch(() => toast.error('Export failed'))
               }
-              className="inline-flex items-center gap-1.5 rounded border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              className="inline-flex items-center gap-1.5 rounded-sm border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
               title="Download only the admin-added (custom) aliases as CSV"
             >
               <Download className="h-4 w-4" />
@@ -1488,7 +1488,7 @@ function AliasDictCard() {
                           <button
                             title="Remove alias"
                             onClick={() => delM.mutate(r)}
-                            className="rounded p-1 text-rose-500 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                            className="rounded-sm p-1 text-rose-500 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -1506,7 +1506,7 @@ function AliasDictCard() {
         </div>
 
         <p className="text-xs text-slate-400">
-          Bulk row example: <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">SEX,&quot;gender,patient_sex,gender_at_birth&quot;</code>
+          Bulk row example: <code className="rounded-sm bg-slate-100 px-1 dark:bg-slate-800">SEX,&quot;gender,patient_sex,gender_at_birth&quot;</code>
         </p>
       </CardBody>
     </Card>

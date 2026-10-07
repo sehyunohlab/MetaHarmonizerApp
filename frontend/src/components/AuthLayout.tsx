@@ -21,7 +21,7 @@ export default function AuthLayout({
         <ThemeToggle />
       </div>
       {/* Brand panel */}
-      <div className="relative hidden overflow-hidden bg-gradient-to-br from-primary-700 via-primary-600 to-primary-800 lg:flex lg:flex-col lg:justify-between lg:p-12">
+      <div className="relative hidden overflow-hidden bg-linear-to-br from-primary-700 via-primary-600 to-primary-800 lg:flex lg:flex-col lg:justify-between lg:p-12">
         <SquaresBackdrop sparse className="absolute inset-0 text-white dark:text-white" />
         <div className="relative flex items-center gap-3 text-white">
           <LogoMark size={40} mono className="text-white" />
