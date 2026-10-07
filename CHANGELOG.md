@@ -34,8 +34,9 @@ versioning once a stable `1.x` release is declared.
   the uploaded text, so `NA` no longer becomes blank and `51` no longer becomes
   `51.0`.
 - Every export now uses the same column for a schema field: a rejected mapping
-  never fills one, accepted beats pending, then higher confidence, then the
-  column that comes first in the upload. The cBioPortal exports previously
+  never fills one; a mapping a curator reviewed beats one the engine accepted
+  on its own, which beats a pending suggestion; then higher confidence, then
+  the column that comes first in the upload. The cBioPortal exports previously
   ranked by confidence alone, so they could take SAMPLE_ID from a rejected
   column or a field from an unreviewed suggestion, and ties depended on
   database order.

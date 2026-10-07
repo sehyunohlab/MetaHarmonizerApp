@@ -4,9 +4,10 @@ The Harmonized CSV, the cBioPortal clinical file and the cBioPortal study
 folder (attributes and PATIENT_ID / SAMPLE_ID) share one rule:
 
 - a rejected or unmapped column never fills a schema field;
-- when several columns map to one field, an accepted mapping beats a pending
-  one, then the higher confidence wins, then the column that comes first in the
-  upload, never the order the database happens to return mappings in.
+- when several columns map to one field, a mapping a curator reviewed beats
+  one the engine accepted on its own, which beats a pending suggestion; then
+  the higher confidence wins, then the column that comes first in the upload,
+  never the order the database happens to return mappings in.
 
 A rejected column is kept in the Harmonized CSV exactly as uploaded.
 """
@@ -31,13 +32,15 @@ ID_CANDIDATES = {
 }
 
 
-def _m(raw, matched, status="accepted", *, curator=None, confidence=0.9):
+def _m(raw, matched, status="accepted", *, curator=None, confidence=0.9, reviewed=False):
     return {
         "raw_column": raw,
         "matched_field": matched,
         "curator_field": curator,
         "status": status,
         "confidence_score": confidence,
+        # Set by every curator action; empty on rows the engine wrote itself.
+        "reviewed_at": "2026-10-07T12:00:00+00:00" if reviewed else None,
     }
 
 
@@ -144,6 +147,17 @@ def test_a_curator_accepted_column_beats_an_unreviewed_suggestion_in_every_expor
     assert cbio_sources(df, mappings)["SEX"] == "Gender"
 
 
+def test_a_mapping_you_reviewed_beats_one_the_engine_accepted_on_its_own():
+    df = pd.DataFrame({"Tumor_Site": ["Uterus"], "Primary_Site": ["Endometrium"]})
+    mappings = [  # highest confidence first, as the database returns them
+        _m("Tumor_Site", "body_site", confidence=0.97),  # auto-accepted by the engine
+        _m("Primary_Site", "body_site", confidence=0.6, reviewed=True),  # accepted by the curator
+    ]
+
+    assert csv_sources(df, mappings)["BODY_SITE"] == "Primary_Site"
+    assert cbio_sources(df, mappings)["BODY_SITE"] == "Primary_Site"
+
+
 @pytest.mark.parametrize("database_order", ["upload-order", "reversed"])
 def test_a_tie_goes_to_the_first_column_in_the_upload(database_order):
     df = pd.DataFrame({"Gender": ["F"], "Sex_Reported": ["Female"]})
@@ -194,8 +208,12 @@ def _random_review(rng: random.Random) -> tuple[pd.DataFrame, list[dict]]:
             curator = rng.choice(targets)  # edited by the curator
         if status == "rejected" and rng.random() < 0.3:
             curator = rng.choice(targets)  # batch reject keeps an earlier edit
+        # Edits are curator decisions; other accepts and rejects may be the engine's own.
+        reviewed = curator is not None or (status in ("accepted", "rejected") and rng.random() < 0.5)
         confidence = rng.choice([0.5, 0.8, 0.95, 0.95, 1.0, None])
-        mappings.append(_m(column, rng.choice(targets), status, curator=curator, confidence=confidence))
+        mappings.append(
+            _m(column, rng.choice(targets), status, curator=curator, confidence=confidence, reviewed=reviewed)
+        )
     # Highest confidence first, NULLS LAST; rows with equal confidence in no fixed order.
     rng.shuffle(mappings)
     mappings.sort(key=lambda m: -1.0 if m["confidence_score"] is None else -m["confidence_score"] - 1)

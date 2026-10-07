@@ -214,18 +214,24 @@ def _select_sources(
 ) -> dict[str, tuple[str, str]]:
     """Choose one source column per schema field: ``{field key: (column, field)}``.
 
-    Accepted beats pending, then higher confidence, then the column that comes
-    first in the upload, so the choice never depends on the order mappings are
-    stored in. ``key`` folds field names that must not repeat in an export
-    (cBioPortal attribute ids).
+    A mapping a curator reviewed beats one the engine accepted on its own, which
+    beats a pending suggestion; then higher confidence wins, then the column
+    that comes first in the upload, so the choice never depends on the order
+    mappings are stored in. ``key`` folds field names that must not repeat in an
+    export (cBioPortal attribute ids).
     """
     position = {column: i for i, column in enumerate(columns)}
-    best: dict[str, tuple[tuple[bool, float, int], str, str]] = {}
+    best: dict[str, tuple[tuple[bool, bool, float, int], str, str]] = {}
     for m in mappings:
         raw, target = m.get("raw_column"), _mapping_target(m)
         if raw not in position or not target:
             continue
-        rank = (m["status"] == "accepted", float(m.get("confidence_score") or 0.0), -position[raw])
+        rank = (
+            m["status"] == "accepted",
+            bool(m.get("reviewed_at")),  # stamped by every curator decision
+            float(m.get("confidence_score") or 0.0),
+            -position[raw],
+        )
         field_key = key(target) if key else target
         if field_key not in best or rank > best[field_key][0]:
             best[field_key] = (rank, raw, target)

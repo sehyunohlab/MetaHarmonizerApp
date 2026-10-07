@@ -53,7 +53,7 @@ export function dropExplanation(column: ExportColumnChange, columns: ExportColum
 export const DROP_REASON_HINT: Record<ExportDropReason, string> = {
   no_target: 'Only columns mapped to a schema field are exported.',
   duplicate_target:
-    'A CSV cannot repeat a column name, so one column per field is exported: accepted mappings win, then higher confidence, then the first column in your file.',
+    'A CSV cannot repeat a column name, so one column per field is exported: your accepted or edited mappings first, then ones the engine accepted on its own, then higher confidence, then the first column in your file.',
   name_conflict: 'Its mapping was rejected, but its original name is already used by a mapped column.',
 };
 
