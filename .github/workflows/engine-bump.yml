@@ -2,8 +2,8 @@ name: Engine Upgrade
 
 # Fetch a new upstream engine version, build + vendor its wheel, verify it works
 # against our adapter contract AND the real engine, then open a PR. This is the
-# "upgrade the engine on purpose, with a safety net" workflow referenced in
-# docs/engine-team-collaboration.md — we pin a bundle and bump it deliberately.
+# "upgrade the engine on purpose, with a safety net" workflow — we pin a bundle
+# and bump it deliberately.
 #
 # Manual trigger: pass the upstream ref (commit SHA — preferred — tag, or branch).
 
