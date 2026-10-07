@@ -52,7 +52,7 @@ async def diff_app(database_url, tmp_path):
         await s.commit()
 
     from fastapi import FastAPI
-    from app.core.deps import current_user
+    from app.routers.deps import current_user
     from app.core.middleware import install_observability
     from app.routers import admin
 

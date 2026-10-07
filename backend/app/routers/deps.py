@@ -14,7 +14,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import AppError
+from app.core.errors import AuthError, ForbiddenError
 from app.core.security import API_TOKEN_PREFIX, decode_token, hash_api_token
 from app.core.settings import settings
 from app.db.models import User
@@ -25,16 +25,6 @@ from app.repositories import users as users_repo
 
 # Role hierarchy: higher number = more privilege.
 ROLE_RANK = {"curator": 1, "admin": 2}
-
-class AuthError(AppError):
-    code = "AUTH_FAILED"
-    status_code = 401
-
-
-class ForbiddenError(AppError):
-    code = "FORBIDDEN"
-    status_code = 403
-
 
 # Stable identity for the AUTH_MODE=none admin.
 _DEV_ADMIN_EMAIL = "dev@localhost"
@@ -79,6 +69,19 @@ async def _user_from_api_token(request: Request, db: AsyncSession, token: str) -
     request.state.user_id = user.id
     request.state.token_scope = record.scope  # "read" | "write"
     return user
+
+
+async def api_token_owner_id(token: str) -> int | None:
+    """Owner id of an active personal API token, else ``None``.
+
+    Wired into the rate limiter in app/main.py so API-token callers are
+    budgeted per user rather than per IP.
+    """
+    from app.db.session import SessionLocal
+
+    async with SessionLocal() as db:
+        record = await api_tokens_repo.get_active_by_hash(db, hash_api_token(token))
+    return record.user_id if record is not None else None
 
 
 async def current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:

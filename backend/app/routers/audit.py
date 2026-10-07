@@ -13,11 +13,11 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import require_role
 from app.core.pagination import Page, build_page, clamp_limit, decode_cursor
 from app.db.models import User
 from app.db.session import get_db
 from app.repositories.audit import list_audit_events
+from app.routers.deps import require_role
 from app.schemas.audit import AuditEventOut
 
 router = APIRouter(prefix="/api/v1/audit", tags=["audit"])

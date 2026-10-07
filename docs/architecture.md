@@ -59,6 +59,10 @@ flowchart LR
 - **Workers** execute bounded asynchronous tasks and publish progress through
   Redis; durable status remains in PostgreSQL.
 
+The full per-package import rules are listed in
+[backend/STRUCTURE.md](../backend/STRUCTURE.md) and enforced by
+`backend/tests/unit/test_layering.py`.
+
 Some routers still contain transaction orchestration. This is accepted where
 the workflow is short and transport-specific, but new reusable behavior should
 move into services rather than expanding router modules further.
@@ -68,7 +72,9 @@ move into services rather than expanding router modules further.
 - `src/api/` owns typed HTTP calls and response shapes.
 - `src/hooks/` owns shared server-state queries and invalidation.
 - `src/context/` owns authentication, jobs, notifications, and theme state.
-- `src/pages/` composes workflows.
+- `src/pages/` composes workflows. A page entry (for example `AdminPage.tsx`)
+  stays thin; its page-specific sections, dialogs, and state hook live in a
+  sibling folder (`admin/`, `mapping-review/`, `ontology-review/`).
 - `src/components/` and `src/components/ui/` own reusable product and visual
   components.
 

@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import (
+from app.repositories import mappings as mappings_repo
+from app.schemas.quality import (
     ConfidenceBucket,
     QualityMetrics,
     StageBreakdown,
 )
-from app.repositories import mappings as mappings_repo
 
 
 async def compute_quality_metrics(db: AsyncSession, study_id: str) -> QualityMetrics:

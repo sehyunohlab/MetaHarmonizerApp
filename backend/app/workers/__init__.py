@@ -1,10 +1,10 @@
 """
-Background workers — `arq` tasks run in a separate worker process.
+Background work for the harmonize pipeline.
 
-- settings.py   — arq WorkerSettings (Redis, concurrency=1 job/process)
-- jobs.py       — harmonize_columns / harmonize_values task wrappers
-- lifecycle.py  — job_runs state machine, retry/timeout/cancel (spec §6.3)
+- queue.py      — job dispatch: inline executor vs arq queue + backpressure gate
+- tasks.py      — the harmonize task: job lifecycle, progress events, bounded retries
+- arq_worker.py — arq WorkerSettings for the separate worker process
+- retention.py  — scheduled data-retention cleanup
 
-This is the ONLY place outside engine_adapter/ that runs the engine
-(workers import the adapter, not the wheel). Added in Sprint 4.
+Workers run the engine through app.engine_adapter (never the wheel directly).
 """

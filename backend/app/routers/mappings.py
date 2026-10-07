@@ -9,25 +9,26 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import (
+from app.db.models import User
+from app.db.session import get_db
+from app.repositories import audit as audit_repo
+from app.repositories import learned_decisions as ld_repo
+from app.repositories import mappings as mappings_repo
+from app.repositories import studies as studies_repo
+from app.routers.deps import (
     actor_label as _actor_label,
     ensure_study_visible,
     owned_study,
     require_role,
 )
-from app.db.models import User
-from app.db.session import get_db
-from app.models import (
+from app.schemas.mappings import (
     BatchUpdateRequest,
     BatchUpdateResponse,
     MappingEditRequest,
     MappingOut,
 )
-from app.repositories import audit as audit_repo
-from app.repositories import learned_decisions as ld_repo
-from app.repositories import mappings as mappings_repo
-from app.repositories import studies as studies_repo
 from app.services import active_learning
+from app.services.llm_rematch import LLMMatchUnavailable, llm_suggestions
 from app.services.ontology_rerun import rerun_column_ontology
 
 router = APIRouter(prefix="/api/v1/mappings", tags=["mappings"])
@@ -354,17 +355,9 @@ async def llm_rematch(
     if not study or not study.get("file_path"):
         raise HTTPException(status_code=404, detail="Study CSV not found")
 
-    from app.engine_adapter import get_engine
-    from app.core.storage import get_storage
-
-    engine = get_engine()
     try:
-        with get_storage().local(study["file_path"]) as local_csv:
-            suggestions = engine.llm_match(
-                csv_path=str(local_csv),
-                raw_column=mapping["raw_column"],
-            )
-    except RuntimeError as exc:
+        suggestions = llm_suggestions(study["file_path"], mapping["raw_column"])
+    except LLMMatchUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     await audit_repo.add_audit_entry(

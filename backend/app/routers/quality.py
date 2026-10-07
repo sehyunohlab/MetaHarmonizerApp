@@ -14,12 +14,12 @@ from typing import Optional
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import current_user, ensure_study_visible, owned_study
 from app.db.models import User
 from app.db.session import get_db
-from app.models import QualityMetrics
 from app.repositories import mappings as mappings_repo
 from app.repositories import studies as studies_repo
+from app.routers.deps import current_user, ensure_study_visible, owned_study
+from app.schemas.quality import QualityMetrics
 from app.services.analytics import compute_quality_metrics
 from app.services.mapping_evaluation import evaluate_accuracy
 
