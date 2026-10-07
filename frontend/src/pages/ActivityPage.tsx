@@ -300,7 +300,7 @@ function ActionFilter({ value, onChange }: { value: string; onChange: (v: string
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="field flex !w-56 items-center justify-between gap-2 !py-2 text-left"
+        className="field flex w-56! items-center justify-between gap-2 py-2! text-left"
       >
         <span className="flex items-center gap-2 truncate">
           {current ? (
@@ -333,7 +333,7 @@ function ActionFilter({ value, onChange }: { value: string; onChange: (v: string
                 onClick={() => { onChange(a); setOpen(false); }}
                 className="menu-item"
               >
-                <span className={`grid h-6 w-6 place-items-center rounded ${m.tone}`}>{m.icon}</span>
+                <span className={`grid h-6 w-6 place-items-center rounded-sm ${m.tone}`}>{m.icon}</span>
                 {m.verb}
               </button>
             );
@@ -379,7 +379,7 @@ function UserFilter({
           setOpen((o) => !o);
           window.setTimeout(() => inputRef.current?.focus(), 0);
         }}
-        className="field flex !w-56 items-center justify-between gap-2 !py-2 text-left"
+        className="field flex w-56! items-center justify-between gap-2 py-2! text-left"
       >
         <span className="truncate">
           {value ? (
@@ -402,7 +402,7 @@ function UserFilter({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search name or email…"
-              className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100"
+              className="w-full bg-transparent text-sm text-slate-800 outline-hidden placeholder:text-slate-400 dark:text-slate-100"
             />
           </div>
           <div className="max-h-64 overflow-auto py-1">
@@ -468,7 +468,7 @@ function WhenFilter({
         <select
           value={rangeIdx}
           onChange={(e) => onRange(Number(e.target.value))}
-          className="field !py-2"
+          className="field py-2!"
         >
           {TIME_RANGES.map((r, i) => (
             <option key={r.label} value={i}>
@@ -483,7 +483,7 @@ function WhenFilter({
               value={from}
               max={to || undefined}
               onChange={(e) => onFrom(e.target.value)}
-              className="bg-transparent text-xs text-slate-700 outline-none dark:text-slate-200 [color-scheme:light] dark:[color-scheme:dark]"
+              className="bg-transparent text-xs text-slate-700 outline-hidden dark:text-slate-200 scheme-light dark:scheme-dark"
               aria-label="From date"
             />
             <span className="text-slate-400">→</span>
@@ -492,7 +492,7 @@ function WhenFilter({
               value={to}
               min={from || undefined}
               onChange={(e) => onTo(e.target.value)}
-              className="bg-transparent text-xs text-slate-700 outline-none dark:text-slate-200 [color-scheme:light] dark:[color-scheme:dark]"
+              className="bg-transparent text-xs text-slate-700 outline-hidden dark:text-slate-200 scheme-light dark:scheme-dark"
               aria-label="To date"
             />
           </div>
@@ -540,7 +540,7 @@ function StudyFilter({
           setOpen((o) => !o);
           window.setTimeout(() => inputRef.current?.focus(), 0);
         }}
-        className="field flex !w-56 items-center justify-between gap-2 !py-2 text-left"
+        className="field flex w-56! items-center justify-between gap-2 py-2! text-left"
       >
         <span className="flex min-w-0 items-center gap-2">
           <FileSpreadsheet className="h-4 w-4 shrink-0 text-slate-400" />
@@ -557,7 +557,7 @@ function StudyFilter({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search study name or id…"
-              className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100"
+              className="w-full bg-transparent text-sm text-slate-800 outline-hidden placeholder:text-slate-400 dark:text-slate-100"
             />
           </div>
           <div className="max-h-64 overflow-auto py-1">

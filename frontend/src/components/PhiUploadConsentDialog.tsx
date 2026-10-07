@@ -20,8 +20,8 @@ export default function PhiUploadConsentDialog({
   return (
     <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onCancel()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border border-slate-200 bg-white p-6 shadow-2xl focus:outline-none dark:border-slate-700 dark:bg-slate-900">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-xs" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border border-slate-200 bg-white p-6 shadow-2xl focus:outline-hidden dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-start gap-4">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
               <ShieldAlert className="h-5 w-5" />
@@ -46,7 +46,7 @@ export default function PhiUploadConsentDialog({
               type="checkbox"
               checked={remember}
               onChange={(event) => onRememberChange(event.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-primary-600"
+              className="mt-0.5 h-4 w-4 rounded-sm border-slate-300 accent-primary-600"
             />
             <span>Don’t show this confirmation again on this browser.</span>
           </label>

@@ -134,7 +134,7 @@ export default function StudyListCard({ study, basePath }: { study: Study; baseP
             onClick={() => setConfirming(true)}
             disabled={celebrating}
             title="Mark complete and remove this study"
-            className="group/btn inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 hover:shadow active:scale-95 disabled:opacity-60 dark:border-emerald-500/30 dark:bg-slate-900 dark:text-emerald-300 dark:hover:bg-emerald-500/10"
+            className="group/btn inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-xs transition hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-sm active:scale-95 disabled:opacity-60 dark:border-emerald-500/30 dark:bg-slate-900 dark:text-emerald-300 dark:hover:bg-emerald-500/10"
           >
             <CircleCheck className="h-4 w-4 transition group-hover/btn:scale-110" />
             Complete
