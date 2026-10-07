@@ -80,19 +80,6 @@ coverage.xml
 htmlcov/
 frontend/coverage/
 
-# Personal / local-only documents
-GSoC_Proposal.md
-GSOC_Proposal.pdf
-GSoC 2026 Deliverable Verification - Answers.md
-GSoC 2026 Deliverable Verification.docx
-verification-answers.*
-SYSTEM_OVERVIEW.md
-MEETING_PREP*.md
-MENTOR_QUESTIONS.md
-PROJECT_PLAN.md
-docs/presentation-prep.md
-docs/meeting-prep.md
-
 # Local-only schema-version uploads (runtime artifacts)
 backend/data/schema/versions/
 # Admin-uploaded alias dictionary (runtime; source + merged copy)
@@ -105,52 +92,6 @@ backend/data/schema/aliases/
 *.bak
 *.tmp
 
-# Internal architecture docs (not shipped)
-docs/
-!docs/
-docs/*
-!docs/rollback-drill-2026-08-09.md
-!docs/credential-rotation.md
-!docs/credential-rotation-drill-2026-08-09.md
-!docs/capacity-report-2026-08-13.md
-!docs/capacity-report-2026-08-15.md
-!docs/schema-benchmark-report-2026-08-22.md
-!docs/deployment-review-resolution.md
-!docs/release-process.md
-!docs/curator-guide.md
-!docs/admin-guide.md
-!docs/curator-usability-protocol.md
-!docs/backup-restore-drill-2026-08-17.md
-!docs/operational-alert-drill-2026-08-19.md
-!docs/production-operations.md
-!docs/scaling-plan.md
-!docs/service-level-objectives.md
-!docs/architecture.md
-!docs/architecture-overview.svg
-!docs/kb-lifecycle.md
-!docs/handover.md
-!docs/licensing.md
-
-# Architecture deep dives, decision records, and diagram sources.
-# Re-include the folders, re-ignore their contents, then publish curated files
-# only — working drafts and icon libraries stay local.
-!docs/adr/
-docs/adr/*
-!docs/adr/0001-engine-adapter-pattern.md
-!docs/adr/0002-system-architecture.md
-!docs/adr/0003-two-layer-curation-kb.md
-!docs/adr/0004-locked-decision-review.md
-!docs/architecture/
-docs/architecture/*
-!docs/architecture/README.md
-!docs/architecture/engine-system-design.md
-!docs/architecture/dashboard-system-design.md
-!docs/architecture/system-overview.svg
-!docs/architecture/architecture.d2
-!docs/architecture/architecture.drawio
-!docs/architecture/workspace.dsl
-
-
 # Local KB build output (large; built offline, distributed via the export CLI)
 backend/kb_build/
 backend/kb_import_test/
@@ -162,17 +103,11 @@ backend/kb_build_*.log
 backend/e2e_server.log
 backend/scripts/e2e_export_*.csv
 
-# Local-only working folders (kept out of git by request)
-presentation/
+# Local-only benchmark input data for scripts/run_benchmarks.ps1 (kept out of git by request)
 sehyun-input/
-
-# Local emulator / scratch artifacts
-__azurite_db_*.json
-MetaHarmonizerSchemaRegistry-main*/
 
 # Loose schema-eval outputs at the backend root (regenerable)
 backend/schema_*.csv
-backend/scripts/_diff_wheel.py
 
 # Benchmark outputs at the repo root (regenerable via scripts/eval_schema.py)
 bench_*.csv
