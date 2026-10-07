@@ -21,6 +21,13 @@ versioning once a stable `1.x` release is declared.
   new high-severity npm audit findings (GHSA-vfj7-8cjw-p6xm, GHSA-68fv-2mgg-jv7q)
   without visual changes. The SPA now targets Safari 16.4+, Chrome 111+, and
   Firefox 128+.
+- Added a read-only **Preview changes** view to the Export page (and
+  `GET /api/v1/export/{study_id}/preview`) that compares the Harmonized CSV with
+  the original upload: column renames and drops with their mapping decisions,
+  grouped value changes, and a paged grid of changed cells with their cause.
+- Fixed the Harmonized CSV silently reformatting untouched cells: it now keeps
+  the uploaded text, so `NA` no longer becomes blank and `51` no longer becomes
+  `51.0`.
 
 ## [0.1.0] - 2026-08-19
 

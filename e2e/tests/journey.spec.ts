@@ -104,4 +104,67 @@ test.describe('authenticated journey', () => {
       await request.delete(`/api/v1/studies/${accepted.study_id}`, { headers: auth });
     }
   });
+
+  test('UI previews the harmonized CSV against the upload', async ({ page, request }) => {
+    test.setTimeout(90_000);
+    const login = await request.post('/api/v1/auth/login', {
+      data: { email: EMAIL, password: PASSWORD },
+    });
+    const { access_token } = await login.json();
+    const auth = { Authorization: `Bearer ${access_token}` };
+    const upload = await request.post('/api/v1/harmonize', {
+      headers: auth,
+      multipart: {
+        file: {
+          name: 'preview-regression.csv',
+          mimeType: 'text/csv',
+          buffer: Buffer.from('participant_id,sex\nP001,Female\nP002,NA\n'),
+        },
+        mode: 'schema',
+      },
+    });
+    expect(upload.ok()).toBeTruthy();
+    const accepted = await upload.json();
+
+    try {
+      await expect.poll(async () => {
+        const status = await request.get(`/api/v1/jobs/${accepted.study_id}`, { headers: auth });
+        return (await status.json()).state;
+      }, { timeout: 60_000 }).toBe('succeeded');
+
+      // Every uploaded column is accounted for, in upload order, whatever the
+      // engine mapped it to.
+      const preview = await request.get(
+        `/api/v1/export/${accepted.study_id}/preview?changed_only=false`,
+        { headers: auth },
+      );
+      expect(preview.ok()).toBeTruthy();
+      const body = await preview.json();
+      expect(body.summary.rows).toBe(2);
+      expect(body.columns.map((column: { source: string }) => column.source)).toEqual(['participant_id', 'sex']);
+      expect(body.rows.total).toBe(2);
+
+      await page.goto('/login');
+      await page.locator('input[type="email"], input[name="email"]').first().fill(EMAIL!);
+      await page.locator('input[type="password"]').first().fill(PASSWORD!);
+      await page.locator('button[type="submit"]').first().click();
+      await expect(page).not.toHaveURL(/\/login$/, { timeout: 10_000 });
+      const closeShowcase = page.getByRole('button', { name: 'Close showcase' });
+      if (await closeShowcase.isVisible()) await closeShowcase.click();
+      await page.goto(`/export/${accepted.study_id}?view=preview`);
+
+      await expect(page.getByRole('tab', { name: /Preview changes/ })).toHaveAttribute('aria-selected', 'true');
+      await expect(page.getByRole('heading', { name: 'Column changes', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Changed values', exact: true })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'participant_id', exact: true }).first()).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'sex', exact: true }).first()).toBeVisible();
+
+      // Switching back to Downloads keeps the study and drops the view param.
+      await page.getByRole('tab', { name: /Downloads/ }).click();
+      await expect(page).toHaveURL(new RegExp(`/export/${accepted.study_id}$`));
+      await expect(page.getByRole('button', { name: 'Download Harmonized CSV' })).toBeVisible();
+    } finally {
+      await request.delete(`/api/v1/studies/${accepted.study_id}`, { headers: auth });
+    }
+  });
 });

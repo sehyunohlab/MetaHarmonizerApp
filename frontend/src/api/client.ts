@@ -4,6 +4,8 @@ import { apiFetch, BASE } from './http';
 import { downloadApiFile } from './download';
 import type {
     AuditEvent,
+    ExportPreview,
+    ExportPreviewQuery,
     HarmonizationResults,
     HarmonizeAccepted,
     Mapping,
@@ -281,6 +283,21 @@ export async function downloadLabeledExport(
         `/export/${encodeURIComponent(studyId)}/labeled?format=${format}`,
         `${studyId}_labeled.${format}`,
     );
+}
+
+/** Compare the harmonized CSV with the original upload (read-only; does not
+ *  mark the study exported). */
+export async function getExportPreview(
+    studyId: string,
+    query: ExportPreviewQuery,
+): Promise<ExportPreview> {
+    const qs = new URLSearchParams({
+        offset: String(query.offset),
+        limit: String(query.limit),
+        changed_only: String(query.changedOnly),
+    });
+    if (query.column) qs.set('column', query.column);
+    return request<ExportPreview>(`${BASE}/export/${encodeURIComponent(studyId)}/preview?${qs}`);
 }
 
 /* ---------- Audit (admin) ---------- */

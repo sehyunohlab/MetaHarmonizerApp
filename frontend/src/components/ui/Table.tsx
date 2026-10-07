@@ -1,4 +1,4 @@
-import type { HTMLAttributes } from 'react';
+import type { HTMLAttributes, TdHTMLAttributes, ThHTMLAttributes } from 'react';
 import { cn } from '../../lib/cn';
 
 /**
@@ -36,7 +36,7 @@ export function TBody({ className, ...rest }: HTMLAttributes<HTMLTableSectionEle
   return <tbody className={cn('divide-y divide-slate-100 dark:divide-slate-800', className)} {...rest} />;
 }
 
-export function Th({ className, ...rest }: HTMLAttributes<HTMLTableCellElement>) {
+export function Th({ className, ...rest }: ThHTMLAttributes<HTMLTableCellElement>) {
   return (
     <th
       className={cn(
@@ -48,6 +48,6 @@ export function Th({ className, ...rest }: HTMLAttributes<HTMLTableCellElement>)
   );
 }
 
-export function Td({ className, ...rest }: HTMLAttributes<HTMLTableCellElement>) {
+export function Td({ className, ...rest }: TdHTMLAttributes<HTMLTableCellElement>) {
   return <td className={cn('px-3 py-2.5 align-middle text-slate-700 dark:text-slate-300', className)} {...rest} />;
 }

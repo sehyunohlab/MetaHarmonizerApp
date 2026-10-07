@@ -198,11 +198,38 @@ The first condition blocks export readiness. Pending columns require a decision.
 Unmapped columns are identified in the checklist and are dropped from export.
 When the banner says **Ready to export**, select **Go to export**.
 
-## 5. Download outputs
+## 5. Preview and download outputs
 
-Open **Export** and download any required formats before completing the study:
+Open **Export**. Before downloading, select **Preview changes** to compare the
+Harmonized CSV with your original upload. Previewing is read-only: it does not
+export anything or mark the study as exported.
+
+- The summary shows the row count (rows are never added, removed, or
+  reordered), how many columns are exported, renamed, or left out, and how many
+  cell values change.
+- **Column changes** lists every uploaded column with its export name, its
+  mapping decision, and why a column is not exported. Select a column's changed
+  count to see each distinct value change, such as `F → female`.
+- A column is **Not exported** (left out of the Harmonized CSV) when it is not
+  mapped to a schema field, or when another column already maps to the same
+  field. A CSV cannot repeat a column name, so one column per field is kept:
+  accepted mappings win, then higher confidence. The preview names the column
+  that was kept, for example `Gender already maps to sex`. To export the other
+  column instead, reject or edit one of the two mappings.
+- **Changed values** shows exported rows next to your upload. Changed cells show
+  the exported value with the uploaded value struck through beneath it, colored
+  by cause: an accepted ontology term, or an apostrophe added so spreadsheets
+  treat formula-like text (such as values starting with `=`, `+`, `-`, or `@`,
+  but not plain numbers like `-5`) as text.
+- A warning appears when exported columns still use unreviewed mapping
+  suggestions; review them first so the field names are final.
+
+Then switch to **Downloads** and download any required formats before
+completing the study:
 
 - **Harmonized CSV** contains renamed fields and accepted ontology rewrites.
+  Every other cell keeps its uploaded text exactly, including number formatting
+  and missing-value markers such as `NA`.
 - **cBioPortal Format** is a tab-separated clinical file with cBioPortal header
   lines.
 - **cBioPortal Study Folder (ZIP)** contains metadata and clinical data files

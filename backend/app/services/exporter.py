@@ -14,8 +14,9 @@ import io
 import json
 import re
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pandas as pd
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -182,21 +183,71 @@ def _find_id_column(df: pd.DataFrame, candidates: list[str]) -> str:
 
 # Harmonized CSV
 
-async def export_harmonized_csv(
-    db: AsyncSession, study_id: str, raw_df: pd.DataFrame
-) -> str:
-    """
-    Produce a harmonized CSV: rename raw columns to their accepted/curated
-    mappings, drop unmapped columns, rewrite accepted cell values to their
-    confirmed ontology terms (U5), and return CSV text.
-    """
-    mappings = await mappings_repo.get_mappings(db, study_id)
+ColumnAction = Literal["renamed", "matched", "kept", "dropped"]
+MappingStatus = Literal["accepted", "pending", "rejected", "unmapped"]
+DropReason = Literal["no_target", "duplicate_target", "name_conflict"]
 
+
+@dataclass(frozen=True)
+class ColumnPlan:
+    """How one source column appears in the harmonized CSV."""
+
+    source: str
+    target: str | None  # export column name; None when the column is dropped
+    action: ColumnAction
+    mapping_status: MappingStatus
+    drop_reason: DropReason | None = None
+    # For a dropped column, the source column that took its export name.
+    conflicts_with: str | None = None
+
+
+@dataclass(frozen=True)
+class HarmonizedTable:
+    """The harmonized CSV as text cells, plus the provenance of every change."""
+
+    frame: pd.DataFrame  # exported cells (str), in export column order
+    plan: list[ColumnPlan]  # one entry per source column, in source order
+    rewritten: pd.DataFrame  # True where a cell was rewritten to its ontology term
+    escaped: pd.DataFrame  # True where a cell was escaped against formula injection
+
+    def to_csv(self) -> str:
+        return self.frame.to_csv(index=False)
+
+
+def _text_view(raw_df: pd.DataFrame) -> pd.DataFrame:
+    """Text cells for a typed frame, as a plain CSV round-trip would write them.
+
+    Fallback for callers that only have the type-inferred frame; the export
+    endpoints pass the file's original text instead.
+    """
+    text = pd.read_csv(io.StringIO(raw_df.to_csv(index=False)), dtype=str, keep_default_na=False)
+    text.columns = raw_df.columns
+    text.index = raw_df.index
+    return text
+
+
+def harmonize_table(
+    raw_text: pd.DataFrame,
+    raw_df: pd.DataFrame,
+    mappings: list[dict[str, Any]],
+    value_rewrites: dict[str, dict[str, str]],
+) -> HarmonizedTable:
+    """Build the harmonized table: rename raw columns to their accepted/curated
+    mappings, drop unmapped columns, rewrite accepted cell values to their
+    confirmed ontology terms (U5), and escape formula-like strings.
+
+    ``raw_text`` holds the upload's original cell text and ``raw_df`` the same
+    file read with type inference. Output cells keep the original text unless
+    they are rewritten or escaped, so numbers and missing-value markers are not
+    reformatted. Rewrite lookups use the inferred values, which is how the
+    pipeline records an ontology mapping's ``raw_value``.
+    """
     # One source column per target field: accepted beats pending, then higher
     # confidence wins. Prevents duplicate headers when several source columns
     # map to the same field — a CSV/cBioPortal file can't carry duplicate
     # column names, and the losers are near-duplicate suggestions anyway.
     best_by_target: dict[str, tuple[tuple[int, float], str]] = {}
+    proposed: dict[str, str] = {}
     for m in mappings:
         raw = m["raw_column"]
         if raw not in raw_df.columns:
@@ -210,42 +261,98 @@ async def export_harmonized_csv(
             target = None
         if not target:
             continue
+        proposed[raw] = target
         rank = (1 if status == "accepted" else 0, float(m.get("confidence_score") or 0.0))
         current = best_by_target.get(target)
         if current is None or rank > current[0]:
             best_by_target[target] = (rank, raw)
 
     rename_map: dict[str, str] = {raw: target for target, (_r, raw) in best_by_target.items()}
+    source_of_target = {target: raw for raw, target in rename_map.items()}
     mapped_targets = set(rename_map.values())
-    rejected_raw = [
+    status_by_raw = {m["raw_column"]: m["status"] for m in mappings}
+    rejected_raw = {
         m["raw_column"]
         for m in mappings
         if m.get("status") == "rejected"
         and m.get("raw_column") in raw_df.columns
         and m.get("raw_column") not in mapped_targets
-    ]
+    }
+
+    plan: list[ColumnPlan] = []
+    columns: dict[str, pd.Series] = {}
+    rewritten: dict[str, pd.Series] = {}
+    escaped: dict[str, pd.Series] = {}
     # Preserve original column order for a stable, diff-friendly output.
-    keep_cols = [c for c in raw_df.columns if c in rename_map or c in rejected_raw]
+    for raw in raw_df.columns:
+        status = status_by_raw.get(raw, "unmapped")
+        if status not in ("accepted", "pending", "rejected"):
+            status = "unmapped"
+        if raw in rename_map:
+            target = rename_map[raw]
+            action: ColumnAction = "matched" if target == raw else "renamed"
+        elif raw in rejected_raw:
+            target, action = raw, "kept"
+        else:
+            if raw in proposed:
+                reason: DropReason = "duplicate_target"
+                winner = source_of_target.get(proposed[raw])
+            elif status == "rejected":
+                reason, winner = "name_conflict", source_of_target.get(raw)
+            else:
+                reason, winner = "no_target", None
+            plan.append(ColumnPlan(raw, None, "dropped", status, reason, winner))
+            continue
+        plan.append(ColumnPlan(raw, target, action, status))
 
-    out_df = raw_df[keep_cols].rename(columns=rename_map)
+        text = raw_text[raw]
+        hit = pd.Series(False, index=text.index)
+        lookup = value_rewrites.get(target)
+        if lookup:
+            # Value-level rewrite (U5): replace accepted raw values with their
+            # confirmed ontology term. Unmatched values pass through.
+            terms = raw_df[raw].map(lambda v, _m=lookup: _m.get(str(v)) if pd.notna(v) else None)
+            hit = terms.notna()
+            text = text.where(~hit, terms)
+        # Neutralize spreadsheet formula-injection in this human-facing CSV.
+        # (The cBioPortal TSVs are machine-read by the importer, so they are
+        # not escaped.)
+        guarded = text.map(_guard_formula_injection)
+        columns[target] = guarded
+        rewritten[target] = hit
+        escaped[target] = guarded != text
 
-    # Value-level rewrite (U5): for each output column, replace accepted raw
-    # values with their confirmed ontology term so the table carries resolved
-    # cell values — not just renamed columns. Unmatched values pass through.
+    index = raw_text.index
+    return HarmonizedTable(
+        frame=pd.DataFrame(columns, index=index, dtype=object),
+        plan=plan,
+        rewritten=pd.DataFrame(rewritten, index=index, dtype=bool),
+        escaped=pd.DataFrame(escaped, index=index, dtype=bool),
+    )
+
+
+async def build_harmonized_table(
+    db: AsyncSession,
+    study_id: str,
+    raw_df: pd.DataFrame,
+    raw_text: pd.DataFrame | None = None,
+) -> HarmonizedTable:
+    """Load a study's mappings and confirmed rewrites, then build its table."""
+    mappings = await mappings_repo.get_mappings(db, study_id)
     value_rewrites = await _build_value_rewrites(db, study_id)
-    for col, lookup in value_rewrites.items():
-        if col in out_df.columns:
-            out_df[col] = out_df[col].map(
-                lambda v, _m=lookup: _m.get(str(v), v) if pd.notna(v) else v
-            )
+    if raw_text is None:
+        raw_text = _text_view(raw_df)
+    return harmonize_table(raw_text, raw_df, mappings, value_rewrites)
 
-    # Neutralize spreadsheet formula-injection in this human-facing CSV. (The
-    # cBioPortal TSVs are machine-read by the importer, so they are not escaped.)
-    for col in out_df.columns:
-        if out_df[col].dtype == object:
-            out_df[col] = out_df[col].map(_guard_formula_injection)
 
-    return out_df.to_csv(index=False)
+async def export_harmonized_csv(
+    db: AsyncSession,
+    study_id: str,
+    raw_df: pd.DataFrame,
+    raw_text: pd.DataFrame | None = None,
+) -> str:
+    """Return the harmonized CSV text (see :func:`harmonize_table`)."""
+    return (await build_harmonized_table(db, study_id, raw_df, raw_text)).to_csv()
 
 
 async def _build_value_rewrites(
