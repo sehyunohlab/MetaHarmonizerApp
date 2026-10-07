@@ -243,7 +243,7 @@ export default function ActivityPage() {
         <div className="space-y-6">
           {groups.map(([day, items]) => (
             <div key={day}>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{day}</h3>
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{day}</h2>
               <Card>
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                   {items.map((e) => {

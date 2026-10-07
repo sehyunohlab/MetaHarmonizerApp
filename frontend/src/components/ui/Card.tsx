@@ -25,7 +25,7 @@ export function CardHeader({
           </div>
         )}
         <div>
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</h3>
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
           {description && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{description}</p>}
         </div>
       </div>

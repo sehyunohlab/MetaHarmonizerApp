@@ -49,7 +49,7 @@ export function ExportDownloads({ studyId, studyName }: { studyId: string; study
                   <Icon className="h-6 w-6" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</h3>
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
                   <p className="mt-1 max-w-md text-xs text-slate-500">{desc}</p>
                 </div>
               </div>
@@ -75,7 +75,7 @@ export function ExportDownloads({ studyId, studyName }: { studyId: string; study
                 <Tags className="h-6 w-6" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Labeled Dataset</h3>
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Labeled Dataset</h2>
                 <p className="mt-1 max-w-md text-xs text-slate-500">
                   Curator-confirmed mappings only — a labeled corpus for engine training/evaluation.
                 </p>

@@ -408,7 +408,7 @@ export default function UploadPage() {
       {!file && !followed && (
         <Card>
           <CardBody>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">How the pipeline works</h3>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">How the pipeline works</h2>
             <p className="mb-5 mt-1 text-xs text-slate-500 dark:text-slate-400">
               Powered by the MetaHarmonizer SchemaMapEngine — a 4-stage cascade.
             </p>
