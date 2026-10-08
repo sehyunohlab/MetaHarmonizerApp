@@ -1,0 +1,3 @@
+# Upstream shbrief/MetaHarmonizer commit the vendored engine wheel is built from.
+# Written by the Engine Upgrade workflow; Engine Watch compares it with upstream main.
+5e66ac20e424e1f178d80b476a973b59eb6959fa
