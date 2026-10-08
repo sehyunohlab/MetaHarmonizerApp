@@ -52,6 +52,14 @@ versioning once a stable `1.x` release is declared.
   every exported column by default; **Changed rows only**, **Changed columns
   only**, and the column picker narrow it. The preview API's `changed_only`
   now defaults to `false`.
+- The export preview shows every change. **Changed columns only** also keeps
+  renamed columns, whose headers are highlighted with the uploaded name struck
+  through, and both filters show their counts. Every ontology term change is
+  listed for its column; the 25-item limit now applies only to spreadsheet-safe
+  escapes. Before, a study with 19 renamed columns and 30 ontology changes in
+  one column showed only that column under **Changed columns only**, and listed
+  25 of its 30 changes. The Export page's row and column count is also readable
+  in dark mode.
 - Fixed curator decisions that did not reach the exports. The row
   **Accept**/**Reject** buttons discarded a field set with **Edit** (the batch
   actions kept it), so rejecting and re-accepting an edited mapping exported

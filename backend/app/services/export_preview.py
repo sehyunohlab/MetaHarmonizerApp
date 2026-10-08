@@ -14,7 +14,9 @@ import pandas as pd
 
 from app.services.exporter import HarmonizedTable
 
-# Distinct before → after pairs listed per column; the rest are only counted.
+# Every ontology rewrite is listed: each is a confirmed term a curator may want
+# to check. Other changes (spreadsheet escapes, one per distinct cell text) are
+# listed up to this many per column; the rest are only counted.
 MAX_VALUE_CHANGES = 25
 
 
@@ -129,8 +131,9 @@ def _value_changes(
 ) -> tuple[dict[int, list[dict[str, Any]]], dict[int, int]]:
     """Distinct before → after pairs per export column, most frequent first.
 
-    Returns the listed pairs (up to ``MAX_VALUE_CHANGES`` per column) and how
-    many more distinct pairs each column has, both keyed by column position.
+    Returns the listed pairs (every ontology rewrite, plus up to
+    ``MAX_VALUE_CHANGES`` other changes per column) and how many other pairs
+    each column leaves unlisted, both keyed by column position.
     """
     rows, cols = np.nonzero(changed)
     if len(rows) == 0:
@@ -153,14 +156,15 @@ def _value_changes(
             kind="stable",
         )
     )
-    rank = counts.groupby("col", sort=False).cumcount().to_numpy()
+    capped = counts["reason"] != "ontology"
+    rank = counts[capped].groupby("col", sort=False).cumcount().reindex(counts.index)
     listed: dict[int, list[dict[str, Any]]] = {}
-    for col, b, a, reason, count in counts[rank < MAX_VALUE_CHANGES][
+    for col, b, a, reason, count in counts[~capped | (rank < MAX_VALUE_CHANGES)][
         ["col", "before", "after", "reason", "count"]
     ].itertuples(index=False, name=None):
         listed.setdefault(int(col), []).append(
             {"before": str(b), "after": str(a), "count": int(count), "reason": str(reason)}
         )
-    distinct = counts.groupby("col", sort=False).size()
+    distinct = counts[capped].groupby("col", sort=False).size()
     more = {int(col): max(0, int(n) - MAX_VALUE_CHANGES) for col, n in distinct.items()}
     return listed, more

@@ -44,7 +44,7 @@ export default function ExportPage() {
         icon={<Download className="h-6 w-6" />}
       >
         {study && (
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {study.row_count} rows · {study.column_count} columns
           </p>
         )}

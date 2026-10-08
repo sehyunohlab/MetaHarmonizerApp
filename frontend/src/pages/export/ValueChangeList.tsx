@@ -2,7 +2,7 @@ import { ArrowRight, Rows3 } from 'lucide-react';
 import type { ExportColumnChange } from '../../api/types';
 import Badge from '../../components/ui/Badge';
 import { CellText } from './CellText';
-import { REASON_META, pluralize } from './presentation';
+import { REASON_META, distinctValueChanges, pluralize } from './presentation';
 
 export function ValueChangeList({
   column,
@@ -16,6 +16,9 @@ export function ValueChangeList({
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
           Value changes in <code className="font-mono">{column.target}</code>
+          <span className="ml-1.5 font-normal text-slate-500 dark:text-slate-400">
+            · {pluralize(distinctValueChanges(column), 'distinct value')}
+          </span>
         </p>
         <button type="button" onClick={onShowRows} className="btn-ghost btn-sm">
           <Rows3 className="h-3.5 w-3.5" />
@@ -50,8 +53,8 @@ export function ValueChangeList({
       </ul>
       {column.more_value_changes > 0 && (
         <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-          {pluralize(column.more_value_changes, 'more distinct change')} not listed. Use Show rows to browse every changed
-          cell.
+          {pluralize(column.more_value_changes, 'more distinct change')} not listed (every ontology change is). Use
+          Show rows to browse every changed cell.
         </p>
       )}
     </div>

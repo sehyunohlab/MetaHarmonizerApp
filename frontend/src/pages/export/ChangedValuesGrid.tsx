@@ -13,6 +13,7 @@ import { CellText } from './CellText';
 import {
   REASON_META,
   changedCellsByTarget,
+  changedColumnNames,
   changesByColumn,
   clampOffset,
   renamedFrom,
@@ -32,27 +33,39 @@ const CHANGED_TEXT: Record<ExportChangeReason, string> = {
   other: 'text-sky-800 dark:text-sky-200',
 };
 
+function FilterCount({ value }: { value: number }) {
+  return (
+    <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+      {value.toLocaleString()}
+    </span>
+  );
+}
+
 export function ChangedValuesGrid({
   rows,
   columns,
+  changedRows,
   query,
   fetching,
   onQueryChange,
 }: {
   rows: ExportPreviewRows;
   columns: ExportColumnChange[];
+  changedRows: number;
   query: ExportPreviewQuery;
   fetching: boolean;
   onQueryChange: (query: ExportPreviewQuery) => void;
 }) {
   const [changedColumnsOnly, setChangedColumnsOnly] = useState(false);
   const changedCells = changedCellsByTarget(columns);
+  const changedColumns = changedColumnNames(columns);
   const sources = renamedFrom(columns);
-  const visible = visibleColumnIndexes(rows.columns, changedCells, {
+  const visible = visibleColumnIndexes(rows.columns, changedColumns, {
     changedOnly: changedColumnsOnly,
     focus: query.column,
   });
   const changedTargets = rows.columns.filter((name) => (changedCells[name] ?? 0) > 0);
+  const changedColumnCount = rows.columns.filter((name) => changedColumns.has(name)).length;
   const hasOtherChanges = rows.items.some((row) => row.changes.some((change) => change.reason === 'other'));
   const pageEnd = rows.offset + rows.items.length;
   const refine = (patch: Partial<ExportPreviewQuery>) => onQueryChange({ ...query, offset: 0, ...patch });
@@ -62,7 +75,7 @@ export function ChangedValuesGrid({
       <CardHeader
         icon={<Rows3 className="h-4 w-4" />}
         title="Exported values"
-        description="Every exported value next to your upload. Changed cells show the uploaded value struck through."
+        description="Every exported value next to your upload. Renamed columns and changed cells show the uploaded name or value struck through."
         action={fetching ? <Spinner className="h-4 w-4 text-slate-400" /> : undefined}
       />
 
@@ -77,12 +90,14 @@ export function ChangedValuesGrid({
             }
           />
           Changed rows only
+          <FilterCount value={changedRows} />
         </label>
         <label
           className={cn(
             'inline-flex cursor-pointer items-center gap-2 text-slate-700 dark:text-slate-200',
             query.column !== null && 'cursor-not-allowed opacity-50',
           )}
+          title="Columns that were renamed or have changed values"
         >
           <input
             type="checkbox"
@@ -92,15 +107,16 @@ export function ChangedValuesGrid({
             onChange={(event) => setChangedColumnsOnly(event.target.checked)}
           />
           Changed columns only
+          <FilterCount value={changedColumnCount} />
         </label>
         <label className="inline-flex items-center gap-2 text-slate-700 dark:text-slate-200">
-          <span>Column</span>
+          <span>Values changed in</span>
           <select
             value={query.column ?? ''}
             onChange={(event) => refine({ column: event.target.value || null, changedOnly: true })}
             className="field w-auto py-1.5 pr-8"
           >
-            <option value="">All columns</option>
+            <option value="">Any column</option>
             {changedTargets.map((name) => (
               <option key={name} value={name}>
                 {name}
@@ -169,7 +185,7 @@ export function ChangedValuesGrid({
           <EmptyState
             icon={<Rows3 className="h-6 w-6" />}
             title="No changed columns"
-            description="No exported column has changed values."
+            description="No exported column was renamed or has changed values."
             action={
               <button type="button" className="btn-secondary btn-sm" onClick={() => setChangedColumnsOnly(false)}>
                 Show all columns
@@ -199,19 +215,37 @@ export function ChangedValuesGrid({
                 </th>
                 {visible.map((index) => {
                   const name = rows.columns[index];
+                  const from = sources[name];
                   return (
                     <th
                       key={name}
                       scope="col"
-                      className="sticky top-0 z-20 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2 text-left align-bottom dark:border-slate-700 dark:bg-slate-800"
+                      title={from ? `Renamed from ${from}` : undefined}
+                      className={cn(
+                        'sticky top-0 z-20 whitespace-nowrap border-b px-3 py-2 text-left align-bottom',
+                        from
+                          ? 'border-primary-200 bg-primary-50 dark:border-primary-800 dark:bg-primary-950'
+                          : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800',
+                      )}
                     >
-                      <span className="block font-mono text-[11px] font-semibold text-slate-800 dark:text-slate-100">
+                      <span
+                        className={cn(
+                          'block font-mono text-[11px] font-semibold',
+                          from ? 'text-primary-900 dark:text-primary-100' : 'text-slate-800 dark:text-slate-100',
+                        )}
+                      >
                         {name}
                       </span>
-                      {sources[name] && (
-                        <span className="block font-mono text-[10px] font-normal text-slate-500 dark:text-slate-400">
-                          from {sources[name]}
-                        </span>
+                      {from && (
+                        <>
+                          <span className="sr-only">{`, renamed from ${from}`}</span>
+                          <span
+                            aria-hidden="true"
+                            className="block font-mono text-[10px] font-normal text-rose-700 line-through decoration-rose-400/70 dark:text-rose-300"
+                          >
+                            {from}
+                          </span>
+                        </>
                       )}
                     </th>
                   );
@@ -275,6 +309,10 @@ export function ChangedValuesGrid({
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 px-5 py-3 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
         <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-sm bg-primary-100 ring-1 ring-primary-300 dark:bg-primary-500/20 dark:ring-primary-500/40" />
+          Renamed column
+        </span>
+        <span className="inline-flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-sm bg-emerald-100 ring-1 ring-emerald-300 dark:bg-emerald-500/20 dark:ring-emerald-500/40" />
           {REASON_META.ontology.label}
         </span>
@@ -292,7 +330,7 @@ export function ChangedValuesGrid({
           <span className="font-mono text-rose-700 line-through decoration-rose-400/70 dark:text-rose-300">
             value
           </span>
-          Uploaded value
+          Uploaded value or name
         </span>
       </div>
     </Card>

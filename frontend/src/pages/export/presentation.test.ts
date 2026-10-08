@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { ExportColumnChange } from '../../api/types';
 import {
   changedCellsByTarget,
+  changedColumnNames,
   changesByColumn,
   clampOffset,
   columnFilterCounts,
+  distinctValueChanges,
   dropExplanation,
   filterColumns,
   formatPercent,
@@ -98,16 +100,51 @@ describe('rowRangeLabel', () => {
 
 describe('grid helpers', () => {
   const gridColumns = ['sample_id', 'sex', 'age'];
-  const counts = { sample_id: 0, sex: 3, age: 1 };
+  const changed = new Set(['sex', 'age']);
 
   it('shows a focused column on its own', () => {
-    expect(visibleColumnIndexes(gridColumns, counts, { changedOnly: true, focus: 'age' })).toEqual([2]);
-    expect(visibleColumnIndexes(gridColumns, counts, { changedOnly: false, focus: 'missing' })).toEqual([]);
+    expect(visibleColumnIndexes(gridColumns, changed, { changedOnly: true, focus: 'age' })).toEqual([2]);
+    expect(visibleColumnIndexes(gridColumns, changed, { changedOnly: false, focus: 'missing' })).toEqual([]);
   });
 
   it('hides unchanged columns on request', () => {
-    expect(visibleColumnIndexes(gridColumns, counts, { changedOnly: true, focus: null })).toEqual([1, 2]);
-    expect(visibleColumnIndexes(gridColumns, counts, { changedOnly: false, focus: null })).toEqual([0, 1, 2]);
+    expect(visibleColumnIndexes(gridColumns, changed, { changedOnly: true, focus: null })).toEqual([1, 2]);
+    expect(visibleColumnIndexes(gridColumns, changed, { changedOnly: false, focus: null })).toEqual([0, 1, 2]);
+  });
+
+  it('counts a renamed column as changed even when its values are not', () => {
+    const study = [
+      column({ source: 'subject_id', target: 'PATIENT_ID' }),
+      column({ source: 'disease', target: 'disease', action: 'matched', changed_cells: 681 }),
+      column({ source: 'country', target: 'country', action: 'matched' }),
+      column({ source: 'bmi', target: 'bmi', action: 'kept', mapping_status: 'rejected' }),
+      column({ source: 'notes', target: null, action: 'dropped', drop_reason: 'no_target' }),
+    ];
+    expect(changedColumnNames(study)).toEqual(new Set(['PATIENT_ID', 'disease']));
+  });
+
+  it('keeps every renamed column and every column with changed values', () => {
+    // 19 schema renames and one column whose values became ontology terms.
+    const renamed = Array.from({ length: 19 }, (_, i) => column({ source: `col_${i}`, target: `field_${i}` }));
+    const site = column({ source: 'site', target: 'site', action: 'matched', changed_cells: 60 });
+    const same = column({ source: 'country', target: 'country', action: 'matched' });
+    const study = [...renamed, site, same];
+    const gridNames = study.map((c) => c.target!);
+
+    const shown = visibleColumnIndexes(gridNames, changedColumnNames(study), { changedOnly: true, focus: null });
+
+    expect(shown.map((index) => gridNames[index])).toEqual([...renamed.map((c) => c.target), 'site']);
+  });
+
+  it('counts distinct value changes, listed or not', () => {
+    const changes = Array.from({ length: 30 }, (_, i) => ({
+      before: `value ${i}`,
+      after: `Term ${i}`,
+      count: 2,
+      reason: 'ontology' as const,
+    }));
+    expect(distinctValueChanges(column({ value_changes: changes }))).toBe(30);
+    expect(distinctValueChanges(column({ value_changes: changes.slice(0, 1), more_value_changes: 4 }))).toBe(5);
   });
 
   it('indexes row changes by column', () => {
