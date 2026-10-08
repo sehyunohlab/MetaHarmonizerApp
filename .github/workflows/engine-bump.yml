@@ -9,6 +9,8 @@ name: Engine Upgrade
 # AUTOMATION_APP_ID and AUTOMATION_APP_PRIVATE_KEY secrets exist, so the required
 # checks run on it. Otherwise the workflow token opens it; PRs opened that way
 # don't start other workflows, so close and reopen the PR to run its checks.
+# When GitHub won't let Actions open PRs, an issue links to the pushed branch so
+# a maintainer opens the PR in one click (scripts/open_automation_pr.sh).
 
 run-name: Engine Upgrade to ${{ inputs.ref }}
 
@@ -28,7 +30,7 @@ on:
 permissions:
   contents: write # push the bump branch
   pull-requests: write # open the PR
-  issues: write # report a failed upgrade
+  issues: write # report a failed upgrade, or link a PR Actions can't open
 
 concurrency:
   group: engine-bump
@@ -229,6 +231,7 @@ jobs:
       - name: Open the upgrade PR
         env:
           GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
+          ISSUE_GH_TOKEN: ${{ github.token }}
           WHEEL: ${{ steps.vendor.outputs.wheel }}
           AUTO_MERGE: ${{ inputs.auto_merge }}
           BASE: ${{ github.event.repository.default_branch }}
@@ -249,29 +252,16 @@ jobs:
             echo
             cat "$RUNNER_TEMP/upstream_changes.md"
             echo
-            echo "### Checks"
-            if [ "$HAS_AUTOMATION_APP" = "true" ]; then
-              echo "Opened by the automation App, so the required checks run on this PR."
-            else
-              echo "Opened with the workflow token, which doesn't start other workflows."
-              echo "**Close and reopen this PR to run the required checks.**"
-            fi
-            echo
             echo "Production changes only when an operator deploys the merged commit (docs/release-process.md)."
           } > "$RUNNER_TEMP/pr_body.md"
-          PR_URL=$(gh pr create --base "$BASE" --head "$BR" \
+          PR_URL=$(bash scripts/open_automation_pr.sh --base "$BASE" --head "$BR" \
             --title "Bump engine to upstream ${NEW:0:12}" \
-            --body-file "$RUNNER_TEMP/pr_body.md")
-          echo "Opened $PR_URL" | tee -a "$GITHUB_STEP_SUMMARY"
-          gh pr list --state open --json number,headRefName --jq '.[] | "\(.number) \(.headRefName)"' |
-            while read -r number head; do
-              case "$head" in
-                "$BR") ;;
-                engine-bump/*) gh pr close "$number" --delete-branch --comment "Superseded by $PR_URL." || true ;;
-              esac
-            done
+            --body-file "$RUNNER_TEMP/pr_body.md" --supersede engine-bump/)
+          if [ -n "$PR_URL" ] && [ "$HAS_AUTOMATION_APP" != "true" ]; then
+            gh pr comment "$PR_URL" --body "Opened with the workflow token, which doesn't start other workflows. **Close and reopen this PR to run the required checks.**"
+          fi
           if [ "$AUTO_MERGE" = "true" ]; then
-            if [ "$HAS_AUTOMATION_APP" = "true" ]; then
+            if [ -n "$PR_URL" ] && [ "$HAS_AUTOMATION_APP" = "true" ]; then
               gh pr merge "$PR_URL" --auto --squash --delete-branch ||
                 echo "::warning::Could not enable auto-merge; is 'Allow auto-merge' on in the repository settings?"
             else

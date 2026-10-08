@@ -21,6 +21,8 @@ on:
       - "scripts/rollback_revision.sh"
       - "scripts/deploy_kb_bundle.sh"
       - "scripts/test_deploy_revision.sh"
+      - "scripts/open_automation_pr.sh"
+      - "scripts/test_open_automation_pr.sh"
       - "deploy/systemd/metaharmonizer-kb-update.service"
       - ".github/workflows/deploy-smoke.yml"
   pull_request:
@@ -43,6 +45,9 @@ jobs:
           bash -n scripts/deploy_kb_bundle.sh
           bash -n scripts/test_deploy_revision.sh
           bash scripts/test_deploy_revision.sh
+          bash -n scripts/open_automation_pr.sh
+          bash -n scripts/test_open_automation_pr.sh
+          bash scripts/test_open_automation_pr.sh
 
       # Minimal env the api/worker/seed services read via `env_file: .env`.
       - name: Write .env

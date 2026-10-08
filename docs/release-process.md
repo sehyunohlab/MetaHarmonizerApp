@@ -109,6 +109,13 @@ installs it on this repository. Without it, the workflow token opens the PR;
 GitHub doesn't start other workflows for such PRs, so close and reopen the PR
 to run its checks.
 
+If GitHub refuses, for example because the organization doesn't let Actions
+create pull requests, the run still succeeds with a warning. It opens an issue
+titled `Open the pull request for <branch>` whose link opens the PR with its
+title and description filled in. The checks run because a person opens it, and
+merging it closes the issue. A newer KB checksum or engine bump closes the PRs
+and issues it supersedes.
+
 ### Admin changes
 
 User roles, learned decisions, schema versions, and aliases made through the
