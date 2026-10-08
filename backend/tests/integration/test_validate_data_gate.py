@@ -49,29 +49,35 @@ def _patch_repos(monkeypatch, mappings, study):
 
 
 def _sample_study_zip(monkeypatch) -> bytes:
-    raw_df = pd.DataFrame(
-        {
-            "subject": ["p1", "p1", "p2", "p3"],
-            "samp": ["s1", "s2", "s3", "s4"],
-            "gender": ["Male", "Male", "Female", "Male"],
-            "os_status": ["LIVING", "LIVING", "DECEASED", "LIVING"],
-            "os_months": ["10.5", "10.5", "22.0", "5.0"],
-            "sample_type": ["Primary", "Metastasis", "Primary", "Primary"],
-            # yes/no text is typed BOOLEAN, which cBioPortal only accepts as TRUE/FALSE.
-            "ffpe": ["yes", "No", "no", "YES"],
-        }
+    # Read like the export endpoints read an upload: type-inferred and as text.
+    upload = (
+        "subject,samp,gender,os_status,os_months,sample_type,ffpe,smoker,note\n"
+        'p1,0012,Male,LIVING,10.5,Primary,yes,TRUE,"two\nlines"\n'
+        'p1,0013,Male,LIVING,10.5,Metastasis,No,FALSE,"say ""hi"""\n'
+        "p2,0014,Female,DECEASED,22.0,Primary,no,,plain\n"
+        "p3,0015,Male,LIVING,5.0,Primary,YES,TRUE,\n"
     )
+    raw_df = pd.read_csv(io.StringIO(upload), low_memory=False)
+    raw_text = pd.read_csv(io.StringIO(upload), dtype=str, keep_default_na=False)
     mappings = [
         {"raw_column": "subject", "matched_field": "PATIENT_ID", "status": "accepted"},
+        # Zero-padded sample IDs must survive (pandas reads them as numbers).
         {"raw_column": "samp", "matched_field": "SAMPLE_ID", "status": "accepted"},
         {"raw_column": "gender", "matched_field": "SEX", "status": "accepted"},
         {"raw_column": "os_status", "matched_field": "OS_STATUS", "status": "accepted"},
         {"raw_column": "os_months", "matched_field": "OS_MONTHS", "status": "accepted"},
         {"raw_column": "sample_type", "matched_field": "SAMPLE_TYPE", "status": "accepted"},
+        # yes/no text is typed BOOLEAN, which cBioPortal only accepts as TRUE/FALSE.
         {"raw_column": "ffpe", "matched_field": "FFPE", "status": "accepted"},
+        # TRUE/FALSE is read as booleans, which must not be declared NUMBER.
+        {"raw_column": "smoker", "matched_field": "SMOKER", "status": "accepted"},
+        # A line break or quotes in a value must not break the file.
+        {"raw_column": "note", "matched_field": "NOTE", "status": "accepted"},
     ]
     _patch_repos(monkeypatch, mappings, {"name": "Validate Test Study"})
-    return asyncio.run(exporter.export_cbioportal_study(None, "study1", raw_df))
+    return asyncio.run(
+        exporter.export_cbioportal_study(None, "study1", raw_df, raw_text=raw_text)
+    )
 
 
 @pytest.mark.skipif(

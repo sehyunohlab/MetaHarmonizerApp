@@ -71,20 +71,35 @@ async def get_mapping(db: AsyncSession, mapping_id: int) -> dict | None:
     return _to_dict(m) if m else None
 
 
+class _Keep:
+    """Default for a curator field the caller doesn't set: keep the stored value."""
+
+
+_KEEP = _Keep()
+
+
 async def update_mapping_status(
     db: AsyncSession,
     mapping_id: int,
     status: str,
-    curator_field: str | None = None,
-    curator_note: str | None = None,
+    curator_field: str | None | _Keep = _KEEP,
+    curator_note: str | None | _Keep = _KEEP,
     reviewed_by: int | None = None,
 ) -> dict | None:
+    """Record a curator decision on one mapping.
+
+    ``curator_field`` and ``curator_note`` keep their stored values unless
+    given, so accepting or rejecting acts on the field the review page shows
+    (the curator's edit, else the suggestion), as a batch decision does.
+    """
     m = await db.get(Mapping, mapping_id)
     if not m:
         return None
     m.status = status
-    m.curator_field = curator_field
-    m.curator_note = curator_note
+    if not isinstance(curator_field, _Keep):
+        m.curator_field = curator_field
+    if not isinstance(curator_note, _Keep):
+        m.curator_note = curator_note
     m.reviewed_at = datetime.now(timezone.utc)
     m.reviewed_by = reviewed_by
     await db.flush()

@@ -133,9 +133,9 @@ test.describe('authenticated journey', () => {
       }, { timeout: 60_000 }).toBe('succeeded');
 
       // Every uploaded column is accounted for, in upload order, whatever the
-      // engine mapped it to.
+      // engine mapped it to; every row is listed by default.
       const preview = await request.get(
-        `/api/v1/export/${accepted.study_id}/preview?changed_only=false`,
+        `/api/v1/export/${accepted.study_id}/preview`,
         { headers: auth },
       );
       expect(preview.ok()).toBeTruthy();
@@ -155,7 +155,9 @@ test.describe('authenticated journey', () => {
 
       await expect(page.getByRole('tab', { name: /Preview changes/ })).toHaveAttribute('aria-selected', 'true');
       await expect(page.getByRole('heading', { name: 'Column changes', exact: true })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Changed values', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Exported values', exact: true })).toBeVisible();
+      await expect(page.getByRole('checkbox', { name: 'Changed rows only' })).not.toBeChecked();
+      await expect(page.getByRole('checkbox', { name: 'Changed columns only' })).not.toBeChecked();
       await expect(page.getByRole('cell', { name: 'participant_id', exact: true }).first()).toBeVisible();
       await expect(page.getByRole('cell', { name: 'sex', exact: true }).first()).toBeVisible();
 

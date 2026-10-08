@@ -110,6 +110,11 @@ For each proposed mapping:
 - **Edit** replaces the proposed target with the curator-selected field and can
   include a note.
 
+**Accept** and **Reject** keep a field you set with **Edit**, from the row
+buttons and from **Accept all** / **Reject all** alike: rejecting an edited
+mapping and accepting it again exports your edited field, not the original
+suggestion.
+
 Decisions are saved immediately. Accepted, rejected, and edited decisions are
 remembered for the curator so repeated columns can be prefilled or rejected on
 later studies. An admin must separately promote a learned decision before it
@@ -172,6 +177,12 @@ Assigning a term to a repeated raw value applies the same correction to all of
 its occurrences within that field. The preview shows how accepted terms will
 rewrite exported values; the original uploaded file is never modified.
 
+When **Edit** moves a column into one of these fields, its values are mapped
+again for the new field and appear here; the terms you set for them apply in
+every export. Terms belong to a field, not to a column: rejecting or moving one
+column keeps the terms of values that another column of the same field still
+uses.
+
 Values under **No ontology match** may be identifiers, names, free text, or
 terms absent from the current corpus. Use **Find suggestions** to search the
 ontology index. Review each suggestion before applying it; dismissing a
@@ -223,11 +234,13 @@ export anything or mark the study as exported.
   Harmonized CSV keeps it unchanged under its own name (**Kept as uploaded**),
   unless a mapped column is already exported under that name. The cBioPortal
   files leave it out.
-- **Changed values** shows exported rows next to your upload. Changed cells show
-  the exported value with the uploaded value struck through beneath it, colored
-  by cause: an accepted ontology term, or an apostrophe added so spreadsheets
-  treat formula-like text (such as values starting with `=`, `+`, `-`, or `@`,
-  but not plain numbers like `-5`) as text.
+- **Exported values** lists every row and every exported column of the
+  Harmonized CSV. Changed cells show the exported value with the uploaded value
+  struck through beneath it, colored by cause: an accepted ontology term, or an
+  apostrophe added so spreadsheets treat formula-like text (such as values
+  starting with `=`, `+`, `-`, or `@`, but not plain numbers like `-5`) as
+  text. Select **Changed rows only**, **Changed columns only**, or a column to
+  narrow the grid to what changed.
 - A warning appears when exported columns still use unreviewed mapping
   suggestions; review them first so the field names are final.
 
@@ -238,10 +251,14 @@ completing the study:
   Every other cell keeps its uploaded text exactly, including number formatting
   and missing-value markers such as `NA`.
 - **cBioPortal Format** is a tab-separated clinical file with cBioPortal header
-  lines. Yes/no columns are written as `TRUE`/`FALSE`, the only values the
-  cBioPortal format accepts for a yes/no attribute.
+  lines. Cells keep their uploaded text apart from accepted ontology terms, so
+  a sample ID `0012` stays `0012` and an age `045` is not rewritten as `45.0`.
+  Yes/no columns are written as `TRUE`/`FALSE`, the only values the cBioPortal
+  format accepts for a yes/no attribute. cBioPortal reads one line per row and
+  does not unquote values, so a line break or tab inside a value is written as a
+  space and values are never wrapped in quotes.
 - **cBioPortal Study Folder (ZIP)** contains metadata and clinical data files
-  for validation/import.
+  for validation/import, written the same way.
 - **Mapping Report (JSON)** records mapping proposals and curator decisions.
 - **Labeled Dataset (CSV or JSONL)** includes curator-confirmed mappings for
   evaluation or training.

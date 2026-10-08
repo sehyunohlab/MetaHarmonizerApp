@@ -43,6 +43,22 @@ versioning once a stable `1.x` release is declared.
 - cBioPortal exports now write yes/no attributes as `TRUE`/`FALSE`, which
   `validateData.py` requires; the bundled sample metadata failed validation
   before. The CI validator gate now covers a yes/no column.
+- The **Preview changes** grid (now **Exported values**) lists every row and
+  every exported column by default; **Changed rows only**, **Changed columns
+  only**, and the column picker narrow it. The preview API's `changed_only`
+  now defaults to `false`.
+- Fixed curator decisions that did not reach the exports. The row
+  **Accept**/**Reject** buttons discarded a field set with **Edit** (the batch
+  actions kept it), so rejecting and re-accepting an edited mapping exported
+  the engine's suggestion. Ontology terms set for values mapped again after a
+  schema edit were never applied when the upload's values were type-inferred
+  (`1` vs `1.0`, `TRUE` vs `True`). Rejecting or moving a column deleted the
+  ontology terms of values another column of the same field still used.
+- cBioPortal exports keep the uploaded text of every cell they do not rewrite
+  (sample ID `0012` was written as `12`, age `045` as `45.0`), type
+  `TRUE`/`FALSE` columns as BOOLEAN rather than NUMBER, and keep each row on one
+  line: a line break or tab inside a value becomes a space, and values are no
+  longer quoted, since `validateData.py` reads quotes literally.
 
 ## [0.1.0] - 2026-08-19
 

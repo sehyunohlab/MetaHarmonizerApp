@@ -109,17 +109,19 @@ async def accept_mapping(
         actor_id=user.id,
         curator=_actor_label(user),
     )
+    # The accepted field is the one the review page shows: the curator's edit,
+    # else the suggestion.
+    field = mapping.get("curator_field") or mapping.get("matched_field")
     if remember and mapping.get("raw_column"):
         await ld_repo.record_personal(
             db, owner_id=user.id, kind="schema",
             source_key=ld_repo.schema_key(mapping["raw_column"]),
-            decision="accept", target_field=mapping.get("matched_field"),
+            decision="accept", target_field=field,
             origin_study_id=mapping["study_id"],
         )
     await db.commit()
 
     try:
-        field = mapping.get("curator_field") or mapping.get("matched_field")
         summary = await _sync_mapping_ontology(db, mapping, field)
         if summary["added"] or summary["removed"]:
             await db.commit()

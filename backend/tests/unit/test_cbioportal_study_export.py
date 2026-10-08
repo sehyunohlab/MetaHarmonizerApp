@@ -42,6 +42,10 @@ def test_infer_dtype():
     assert exporter._infer_dtype(pd.Series(["1", "2", "3"])) == "NUMBER"
     assert exporter._infer_dtype(pd.Series(["yes", "no", "yes"])) == "BOOLEAN"
     assert exporter._infer_dtype(pd.Series(["lung", "liver"])) == "STRING"
+    # pandas reads TRUE/FALSE as booleans (object dtype when a cell is blank).
+    assert exporter._infer_dtype(pd.Series([True, False])) == "BOOLEAN"
+    assert exporter._infer_dtype(pd.Series([True, None, False], dtype=object)) == "BOOLEAN"
+    assert exporter._infer_dtype(pd.Series([1, 0, 1])) == "NUMBER"
 
 
 def test_clinical_column_specs_excludes_ids_and_banned_and_dedupes():
@@ -450,3 +454,109 @@ def test_linkml_check_flags_unresolved_values(monkeypatch):
     bad = {v["value"] for v in result["violations"]}
     assert bad == {"male", "female"}
 
+
+
+# ---------------------------------------------------------------------------
+# Cells as uploaded (the same text as the Harmonized CSV)
+# ---------------------------------------------------------------------------
+
+
+def _frames(upload: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The upload as the export endpoints read it: type-inferred, and as text."""
+    return (
+        pd.read_csv(io.StringIO(upload), low_memory=False),
+        pd.read_csv(io.StringIO(upload), dtype=str, keep_default_na=False),
+    )
+
+
+def _spec(raw: str, target: str, dtype: str = "STRING") -> dict:
+    return {"raw": raw, "target": target, "display": target.title(),
+            "description": target.lower(), "dtype": dtype, "priority": 1}
+
+
+def test_cells_keep_their_uploaded_text():
+    raw_df, raw_text = _frames("patient,sample,age,bmi\nP1,0012,045,22.50\nP2,0013,NA,19\n")
+    cols = [
+        exporter._id_spec("PATIENT_ID", "patient", "Patient Identifier", "Unique patient identifier"),
+        exporter._id_spec("SAMPLE_ID", "sample", "Sample Identifier", "Unique sample identifier"),
+        _spec("age", "AGE", exporter._infer_dtype(raw_df["age"])),
+        _spec("bmi", "BMI", exporter._infer_dtype(raw_df["bmi"])),
+    ]
+
+    lines = exporter._write_clinical_tsv(cols, raw_df, raw_text=raw_text).splitlines()
+
+    assert lines[2] == "#STRING\tSTRING\tNUMBER\tNUMBER"
+    assert [line.split("\t") for line in lines[5:]] == [
+        ["P1", "0012", "045", "22.50"],
+        ["P2", "0013", "", "19"],
+    ]
+
+
+def test_true_false_columns_are_boolean():
+    raw_df, raw_text = _frames("sample,smoker\na,TRUE\nb,false\nc,\n")
+    cols = [
+        exporter._id_spec("SAMPLE_ID", "sample", "Sample Identifier", "Unique sample identifier"),
+        _spec("smoker", "SMOKER", exporter._infer_dtype(raw_df["smoker"])),
+    ]
+
+    lines = exporter._write_clinical_tsv(cols, raw_df, raw_text=raw_text).splitlines()
+
+    assert lines[2] == "#STRING\tBOOLEAN"
+    assert [line.split("\t")[1] for line in lines[5:]] == ["TRUE", "FALSE", ""]
+
+
+def test_cells_stay_on_one_line_and_are_never_quoted():
+    # cBioPortal reads line by line and keeps quotation marks as part of a value.
+    raw_df, raw_text = _frames(
+        'sample,note\na,"line1\nline2"\nb,"say ""hi"""\nc,\u201csmart\u201d\nd,"tab\there"\n'
+    )
+    cols = [
+        exporter._id_spec("SAMPLE_ID", "sample", "Sample Identifier", "Unique sample identifier"),
+        _spec("note", "NOTE"),
+    ]
+
+    lines = exporter._write_clinical_tsv(cols, raw_df, raw_text=raw_text).splitlines()
+
+    assert lines[5:] == ["a\tline1 line2", 'b\tsay "hi"', 'c\t"smart"', "d\ttab here"]
+
+
+def test_a_value_mapped_after_a_schema_edit_is_rewritten():
+    # The pipeline keys an ontology row by the inferred value ("1.0"); a re-map
+    # after a schema edit by the uploaded text ("1"). Both must rewrite the cell,
+    # and a curator's term wins over the engine's for the same value.
+    raw_df, raw_text = _frames("sample,sex_code\na,1\nb,2\nc,\n")
+    rewrites = exporter.FieldRewrites()
+    rewrites.update({"1": "Male", "2.0": "engine term", "2": "Female"})
+    rewrites.reviewed.add("2")
+    cols = [
+        exporter._id_spec("SAMPLE_ID", "sample", "Sample Identifier", "Unique sample identifier"),
+        _spec("sex_code", "SEX"),
+    ]
+
+    lines = exporter._write_clinical_tsv(cols, raw_df, {"SEX": rewrites}, raw_text).splitlines()
+
+    assert [line.split("\t")[1] for line in lines[5:]] == ["Male", "Female", ""]
+
+
+def test_study_folder_uses_the_uploaded_ids_in_every_file(monkeypatch):
+    raw_df, raw_text = _frames(
+        "patient,sample,sex\n007,0012,F\n7,0013,M\n007,0014,F\n"
+    )
+    mappings = [
+        {"raw_column": "patient", "matched_field": "patient_id", "status": "accepted"},
+        {"raw_column": "sample", "matched_field": "sample_id", "status": "accepted"},
+        {"raw_column": "sex", "matched_field": "sex", "status": "accepted"},
+    ]
+    _patch_repos(monkeypatch, mappings, {"name": "Ids"})
+
+    zf = zipfile.ZipFile(io.BytesIO(asyncio.run(
+        exporter.export_cbioportal_study(None, "ids", raw_df, raw_text=raw_text)
+    )))
+
+    def body(name: str) -> list[list[str]]:
+        return [line.split("\t") for line in zf.read(name).decode().splitlines()[5:]]
+
+    # "007" and "7" are different patients, though both read as the number 7.
+    assert body("data_clinical_patient.txt") == [["007", "F"], ["7", "M"]]
+    assert body("data_clinical_sample.txt") == [["007", "0012"], ["7", "0013"], ["007", "0014"]]
+    assert "case_list_ids: 0012\t0013\t0014" in zf.read("case_lists/cases_all.txt").decode()
