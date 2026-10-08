@@ -64,6 +64,12 @@ versioning once a stable `1.x` release is declared.
   `TRUE`/`FALSE` columns as BOOLEAN rather than NUMBER, and keep each row on one
   line: a line break or tab inside a value becomes a space, and values are no
   longer quoted, since `validateData.py` reads quotes literally.
+- The KB refresh and engine upgrade workflows no longer fail after their work
+  succeeded when GitHub won't let Actions open pull requests. They open an issue
+  whose link opens the PR with its title and description filled in, and a newer
+  bump closes the PRs and issues it supersedes. The October KB refresh
+  republished `kb-latest`, which production deployed, but failed to open its
+  `KB_BUNDLE_SHA256` bump.
 
 ## [0.1.0] - 2026-08-19
 
