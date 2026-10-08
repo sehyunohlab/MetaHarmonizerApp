@@ -6,15 +6,17 @@ Pre-built wheels we install instead of fetching from git, so
 ## `metaharmonizer-0.4.1-py3-none-any.whl`
 
 Built from [`shbrief/MetaHarmonizer`](https://github.com/shbrief/MetaHarmonizer)
-`main` (v0.4.0, src-layout refactor, PR #81), with only the `src/` package tree
-checked out.
+commit `5e66ac2` (2026-07-23), with only the `src/` package tree checked out.
+Every engine source file in the wheel is identical to that commit, including
+the KB export/import CLI (`metaharmonizer/scripts/knowledge_db.py`) that
+`scripts.seed_kb` and `scripts.package_kb` call.
 
-**Patched:** this wheel additionally carries `metaharmonizer/scripts/knowledge_db.py`
-(the KB export/import CLI). The pinned commit predated that module, but
-`scripts.seed_kb` and `scripts.package_kb` require it (`python -m
-metaharmonizer.scripts.knowledge_db import|export`) — without it a Docker/CI
-`kb-import` fails with `No module named metaharmonizer.scripts.knowledge_db`. Re-pin
-from a source that already contains it on the next version bump (then drop this note).
+`ENGINE_REF` records the exact upstream commit. The **Engine Watch** workflow
+compares it with upstream `main` every day. When upstream moves, it starts
+**Engine Upgrade**, which builds the wheel, runs the contract suite and the
+real-engine smoke, updates `ENGINE_REF`, and opens a PR listing upstream's
+changes. If those changes touch code the KB build depends on, merging the PR
+starts **Knowledge Base Refresh**.
 
 The wheel metadata also omits upstream's `nltk` dependency. There are no NLTK
 references anywhere in the engine package, so installing it exposed
@@ -35,9 +37,10 @@ torch on macOS). `backend/requirements.txt` installs it separately
 (`faiss-cpu>=1.11.0`); on macOS use conda-forge. The ontology path
 (`OntoMapEngine`) needs FAISS; `SchemaMapEngine` does not.
 
-## Rebuilding after a version bump
+## Rebuilding by hand
 
-When upstream ships a new commit you want to pin (src-layout, >=0.4.0):
+Normally Engine Upgrade does this; you can also start it from the Actions tab
+with any upstream ref. To rebuild locally (src-layout, >=0.4.0):
 
 ```powershell
 # 1. Sparse-clone only the package source (avoids the ':' corpus filenames)
@@ -60,7 +63,8 @@ $wheel = Get-ChildItem "$env:TEMP\mh_wheel\metaharmonizer-*-py3-none-any.whl" |
 # 4. Drop the new wheel in this directory, remove the old one
 Move-Item $wheel.FullName "$repo\backend\vendor\" -Force
 
-# 5. Update the wheel path + version in backend/requirements.txt, commit, push
+# 5. Update the wheel path + version in backend/requirements.txt, write the
+#    upstream commit to backend/vendor/ENGINE_REF, commit, push
 ```
 
 Linux/macOS: same flow with `bash` and `git`.
