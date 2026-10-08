@@ -29,7 +29,7 @@ def build_preview(
     *,
     offset: int = 0,
     limit: int = 50,
-    changed_only: bool = True,
+    changed_only: bool = False,
     column: str | None = None,
 ) -> dict[str, Any]:
     """Compare ``table`` with the upload's original text.

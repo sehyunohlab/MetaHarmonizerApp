@@ -225,7 +225,7 @@ const demoExportColumns: DemoExportColumn[] = [
 function demoExportPreview(params: URLSearchParams): ExportPreview {
     const offset = Math.max(0, Number(params.get('offset') ?? 0) || 0);
     const limit = Math.max(1, Number(params.get('limit') ?? 50) || 50);
-    const changedOnly = params.get('changed_only') !== 'false';
+    const changedOnly = params.get('changed_only') === 'true';
     const focus = params.get('column');
     const outputs = demoExportColumns.filter((c) => c.target !== null);
     const rowCount = demoStudy.row_count ?? 0;

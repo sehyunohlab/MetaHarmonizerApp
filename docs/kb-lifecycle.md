@@ -35,6 +35,8 @@ flowchart LR
 - **Tar / compress** via `package_kb` → `kb/kb_offline_bundle.tar.gz`.
 - **Upload** to the `kb-latest` GitHub Release (`gh release upload --clobber`),
   then a PR bumps `KB_BUNDLE_SHA256` so the download integrity check stays valid.
+  When GitHub won't let Actions open the PR, an issue links to it instead (see
+  [Automation pull requests](release-process.md#automation-pull-requests)).
 - **Report** in the GitHub Actions summary: per-corpus rows, added/removed IDs,
   relabeled IDs, and before/after mapping-quality metrics. The same evidence,
   including affected ID lists, is retained for 90 days as JSON/CSV artifacts.

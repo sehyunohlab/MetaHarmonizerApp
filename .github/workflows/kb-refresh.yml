@@ -10,6 +10,8 @@ name: Knowledge Base Refresh
 #
 # Republishing changes the bundle's sha256, so the job opens a PR bumping
 # KB_BUNDLE_SHA256 in .env.example — merge it to keep integrity checks valid.
+# When GitHub won't let Actions open PRs, it opens an issue whose link opens
+# that PR in one click instead (scripts/open_automation_pr.sh).
 #
 # It carries EFO + the warmed schema cache forward from the current published
 # bundle (neither is rebuildable), refreshes the fetchable ontologies, and
@@ -37,6 +39,7 @@ permissions:
   actions: read         # download a pre-graft checkpoint on finalize-only retries
   contents: write        # upload the release asset + push the sha-bump branch
   pull-requests: write   # open the sha-bump PR
+  issues: write          # link the PR from an issue when Actions can't open it
 
 concurrency:
   group: kb-refresh
@@ -284,7 +287,10 @@ jobs:
       - name: Open a PR bumping KB_BUNDLE_SHA256
         env:
           GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
+          ISSUE_GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          set -euo pipefail
           SHA="${{ steps.sha.outputs.sha256 }}"
           sed -i -E "s|^KB_BUNDLE_SHA256=.*|KB_BUNDLE_SHA256=${SHA}  # integrity check of the current bundle|" .env.example
           if git diff --quiet -- .env.example; then
@@ -297,12 +303,10 @@ jobs:
           git add .env.example
           git commit -m "chore(kb): bump KB_BUNDLE_SHA256 after KB refresh"
           git push -u origin "$BR"
-          BODY="Automated KB rebuild republished to \`kb-latest\`. New sha256: \`${SHA}\`. Merge to keep the download integrity check in sync."
-          if [ "$HAS_AUTOMATION_APP" != "true" ]; then
-            BODY="$BODY
-
-          Opened with the workflow token, which doesn't start other workflows. **Close and reopen this PR to run the required checks.**"
-          fi
-          gh pr create --base main --head "$BR" \
+          echo "[This KB refresh]($RUN_URL) republished \`kb-latest\`. New sha256: \`${SHA}\`. Merge to keep the download integrity check in sync." > "$RUNNER_TEMP/pr_body.md"
+          PR_URL=$(bash scripts/open_automation_pr.sh --base main --head "$BR" \
             --title "Refresh KB bundle (bump sha256)" \
-            --body "$BODY"
+            --body-file "$RUNNER_TEMP/pr_body.md" --supersede kb-refresh/sha-)
+          if [ -n "$PR_URL" ] && [ "$HAS_AUTOMATION_APP" != "true" ]; then
+            gh pr comment "$PR_URL" --body "Opened with the workflow token, which doesn't start other workflows. **Close and reopen this PR to run the required checks.**"
+          fi

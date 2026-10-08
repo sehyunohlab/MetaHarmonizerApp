@@ -10,9 +10,10 @@ import { PAGE_SIZE } from './presentation';
 import { PreviewSummary } from './PreviewSummary';
 import { useExportDownload } from './useExportDownload';
 
-const INITIAL_QUERY: ExportPreviewQuery = { offset: 0, limit: PAGE_SIZE, changedOnly: true, column: null };
+// Everything by default (changes are highlighted); focusing a column narrows to its changes.
+const INITIAL_QUERY: ExportPreviewQuery = { offset: 0, limit: PAGE_SIZE, changedOnly: false, column: null };
 
-/** Harmonized CSV vs. original upload: summary, column changes, changed cells. */
+/** Harmonized CSV vs. original upload: summary, column changes, every exported value. */
 export function ChangePreview({ studyId }: { studyId: string }) {
   const [query, setQuery] = useState<ExportPreviewQuery>(INITIAL_QUERY);
   const preview = useExportPreview(studyId, query);

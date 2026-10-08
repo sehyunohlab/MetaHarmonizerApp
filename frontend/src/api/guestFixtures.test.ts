@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 const preview = (query: Partial<ExportPreviewQuery> = {}): Promise<ExportPreview> =>
-  getExportPreview(DEMO_STUDY_ID, { offset: 0, limit: 50, changedOnly: true, column: null, ...query });
+  getExportPreview(DEMO_STUDY_ID, { offset: 0, limit: 50, changedOnly: false, column: null, ...query });
 
 describe('guest export preview', () => {
   it('is served from the fixture without touching the network', async () => {
@@ -44,8 +44,8 @@ describe('guest export preview', () => {
     }
   });
 
-  it('lists only changed rows by default, with valid change cells', async () => {
-    const { summary, rows } = await preview({ limit: 200 });
+  it('lists only changed rows when changed_only is on, with valid change cells', async () => {
+    const { summary, rows } = await preview({ changedOnly: true, limit: 200 });
     expect(rows.total).toBe(summary.changed_rows);
     expect(rows.items).toHaveLength(Math.min(200, rows.total));
     for (const row of rows.items) {
@@ -58,14 +58,14 @@ describe('guest export preview', () => {
     }
   });
 
-  it('lists every row when changed_only is off', async () => {
-    const { summary, rows } = await preview({ changedOnly: false, limit: 5 });
+  it('lists every row by default', async () => {
+    const { summary, rows } = await preview({ limit: 5 });
     expect(rows.total).toBe(summary.rows);
     expect(rows.items.map((row) => row.line)).toEqual([1, 2, 3, 4, 5]);
   });
 
   it('focuses a column on its changed cells', async () => {
-    const { columns, rows } = await preview({ column: 'gender', limit: 200 });
+    const { columns, rows } = await preview({ column: 'gender', changedOnly: true, limit: 200 });
     const gender = rows.columns.indexOf('gender');
     expect(rows.total).toBe(columns.find((c) => c.target === 'gender')?.changed_cells);
     for (const row of rows.items) {

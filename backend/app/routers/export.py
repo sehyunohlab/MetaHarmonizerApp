@@ -123,7 +123,7 @@ async def export_preview(
     study_id: str,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    changed_only: bool = True,
+    changed_only: bool = False,
     column: str | None = None,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
@@ -159,8 +159,8 @@ async def export_cbioportal_format(
     db: AsyncSession = Depends(get_db),
 ):
     """Export in cBioPortal clinical data format (tab-separated with header lines)."""
-    raw_df = await _load_raw_df(db, study_id, user)
-    tsv_text = await export_cbioportal(db, study_id, raw_df)
+    raw_df, raw_text = await _load_raw_frames(db, study_id, user, with_text=True)
+    tsv_text = await export_cbioportal(db, study_id, raw_df, raw_text)
     await db.commit()
     return PlainTextResponse(
         content=tsv_text,
@@ -178,8 +178,8 @@ async def export_cbioportal_study_folder(
     db: AsyncSession = Depends(get_db),
 ):
     """Export a validateData.py-ready cBioPortal study folder (zip with meta files)."""
-    raw_df = await _load_raw_df(db, study_id, user)
-    zip_bytes = await export_cbioportal_study(db, study_id, raw_df)
+    raw_df, raw_text = await _load_raw_frames(db, study_id, user, with_text=True)
+    zip_bytes = await export_cbioportal_study(db, study_id, raw_df, raw_text=raw_text)
     await db.commit()
     return Response(
         content=zip_bytes,
@@ -231,8 +231,10 @@ async def export_linkml_check(
     Returns ``{ok, violations}`` — the checklist-vocabulary half of the export
     gate. Does not mark the study exported (it's a pre-export validation).
     """
-    raw_df = await _load_raw_df(db, study_id, user, mark_export=False)
-    result = await linkml_check(db, study_id, raw_df)
+    raw_df, raw_text = await _load_raw_frames(
+        db, study_id, user, mark_export=False, with_text=True
+    )
+    result = await linkml_check(db, study_id, raw_df, raw_text)
     return JSONResponse(content=result)
 
 
