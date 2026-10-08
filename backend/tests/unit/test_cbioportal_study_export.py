@@ -538,6 +538,43 @@ def test_a_value_mapped_after_a_schema_edit_is_rewritten():
     assert [line.split("\t")[1] for line in lines[5:]] == ["Male", "Female", ""]
 
 
+def test_a_number_column_rewritten_to_terms_is_declared_string():
+    # A coded column (1/2) is NUMBER until its values carry terms; validateData.py
+    # rejects text in a NUMBER attribute.
+    raw_df, raw_text = _frames("sample,sex_code,age\na,1,45\nb,2,52\nc,,\n")
+    cols = [
+        exporter._id_spec("SAMPLE_ID", "sample", "Sample Identifier", "Unique sample identifier"),
+        _spec("sex_code", "SEX", exporter._infer_dtype(raw_df["sex_code"])),
+        _spec("age", "AGE", exporter._infer_dtype(raw_df["age"])),
+    ]
+
+    lines = exporter._write_clinical_tsv(
+        cols, raw_df, {"SEX": {"1.0": "Male", "2.0": "Female"}}, raw_text
+    ).splitlines()
+
+    assert lines[2] == "#STRING\tSTRING\tNUMBER"
+    assert [line.split("\t")[1:] for line in lines[5:]] == [["Male", "45"], ["Female", "52"], ["", ""]]
+
+
+def test_predefined_string_attributes_are_declared_string():
+    # cBioPortal fixes the type of its predefined attributes: SEX and
+    # OTHER_SAMPLE_ID are STRING even when the column holds 1/2 or yes/no.
+    raw_df, raw_text = _frames("sample,sex_code,alt_id,smoker\na,1,yes,TRUE\nb,2,no,FALSE\n")
+    mappings = [
+        {"raw_column": "sex_code", "matched_field": "sex", "status": "accepted"},
+        {"raw_column": "alt_id", "matched_field": "other_sample_id", "status": "accepted"},
+        {"raw_column": "smoker", "matched_field": "smoker", "status": "accepted"},
+    ]
+
+    specs = exporter._clinical_column_specs(mappings, raw_df)
+    cols = [exporter._id_spec("SAMPLE_ID", "sample", "Sample Identifier", "Unique sample identifier"), *specs]
+    lines = exporter._write_clinical_tsv(cols, raw_df, raw_text=raw_text).splitlines()
+
+    assert lines[4] == "SAMPLE_ID\tSEX\tOTHER_SAMPLE_ID\tSMOKER"
+    assert lines[2] == "#STRING\tSTRING\tSTRING\tBOOLEAN"
+    assert [line.split("\t")[1:] for line in lines[5:]] == [["1", "yes", "TRUE"], ["2", "no", "FALSE"]]
+
+
 def test_study_folder_uses_the_uploaded_ids_in_every_file(monkeypatch):
     raw_df, raw_text = _frames(
         "patient,sample,sex\n007,0012,F\n7,0013,M\n007,0014,F\n"

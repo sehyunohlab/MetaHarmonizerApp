@@ -149,6 +149,15 @@ _BOOLEAN_TEXT: dict[str, str] = {
     "false": "FALSE", "no": "FALSE", "0": "FALSE",
 }
 
+# Predefined attributes validateData.py requires to be STRING, whatever their
+# values look like (a coded 1/2 SEX column included).
+_STRING_ATTRS: set[str] = {
+    "CANCER_TYPE", "CANCER_TYPE_DETAILED", "DFS_STATUS", "GENDER", "HISTOLOGY",
+    "KNOWN_MOLECULAR_CLASSIFIER", "METASTATIC_SITE", "OS_STATUS", "OTHER_SAMPLE_ID",
+    "PATIENT_DISPLAY_NAME", "PRIMARY_SITE", "SAMPLE_CLASS", "SAMPLE_DISPLAY_NAME",
+    "SAMPLE_TYPE", "SEX", "TUMOR_SITE", "TUMOR_TISSUE_SITE", "TUMOR_TYPE",
+}
+
 
 # Helpers
 
@@ -511,7 +520,7 @@ def _clinical_column_specs(
                 "target": target_id,
                 "display": target.replace("_", " ").title(),
                 "description": target.replace("_", " ").capitalize(),
-                "dtype": _infer_dtype(raw_df[raw]),
+                "dtype": "STRING" if target_id in _STRING_ATTRS else _infer_dtype(raw_df[raw]),
                 "priority": 10 if target_id in _HIGH_PRIORITY_ATTRS else 1,
             }
         )
@@ -594,9 +603,14 @@ def _write_clinical_tsv(
 
     # cBioPortal accepts only TRUE / FALSE in a BOOLEAN attribute: write yes/no
     # and true/false that way, and declare a column holding anything else (for
-    # example, after a value rewrite) as STRING.
+    # example, after a value rewrite) as STRING. Likewise a NUMBER column whose
+    # values were rewritten to terms.
     dtypes = [c["dtype"] for c in cols]
     for j, dtype in enumerate(dtypes):
+        if dtype == "NUMBER":
+            if not all(_is_number(r[j]) for r in rows if r[j].strip()):
+                dtypes[j] = "STRING"
+            continue
         if dtype != "BOOLEAN":
             continue
         values = {r[j].strip().lower() for r in rows if r[j].strip()}
@@ -623,6 +637,15 @@ def _write_clinical_tsv(
 
 
 _TSV_BREAKS = re.compile(r"[\t\r\n]+")
+
+
+def _is_number(text: str) -> bool:
+    """Whether validateData.py reads ``text`` as a NUMBER value."""
+    try:
+        float(text)
+    except ValueError:
+        return False
+    return True
 
 
 def _tsv_cell(text: str) -> str:

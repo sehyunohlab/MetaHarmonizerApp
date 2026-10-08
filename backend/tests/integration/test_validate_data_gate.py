@@ -33,7 +33,7 @@ from app.services import exporter  # noqa: E402
 VALIDATOR = os.getenv("CBIO_VALIDATE_DATA")
 
 
-def _patch_repos(monkeypatch, mappings, study):
+def _patch_repos(monkeypatch, mappings, study, ontology=()):
     async def _get_mappings(db, study_id):
         return mappings
 
@@ -41,7 +41,7 @@ def _patch_repos(monkeypatch, mappings, study):
         return study
 
     async def _get_ontology(db, study_id):
-        return []
+        return list(ontology)
 
     monkeypatch.setattr(exporter.mappings_repo, "get_mappings", _get_mappings)
     monkeypatch.setattr(exporter.studies_repo, "get_study", _get_study)
@@ -51,11 +51,11 @@ def _patch_repos(monkeypatch, mappings, study):
 def _sample_study_zip(monkeypatch) -> bytes:
     # Read like the export endpoints read an upload: type-inferred and as text.
     upload = (
-        "subject,samp,gender,os_status,os_months,sample_type,ffpe,smoker,note\n"
-        'p1,0012,Male,LIVING,10.5,Primary,yes,TRUE,"two\nlines"\n'
-        'p1,0013,Male,LIVING,10.5,Metastasis,No,FALSE,"say ""hi"""\n'
-        "p2,0014,Female,DECEASED,22.0,Primary,no,,plain\n"
-        "p3,0015,Male,LIVING,5.0,Primary,YES,TRUE,\n"
+        "subject,samp,gender,os_status,os_months,sample_type,ffpe,smoker,note,grade,alt\n"
+        'p1,0012,Male,LIVING,10.5,Primary,yes,TRUE,"two\nlines",1,101\n'
+        'p1,0013,Male,LIVING,10.5,Metastasis,No,FALSE,"say ""hi""",2,102\n'
+        "p2,0014,Female,DECEASED,22.0,Primary,no,,plain,,103\n"
+        "p3,0015,Male,LIVING,5.0,Primary,YES,TRUE,,1,104\n"
     )
     raw_df = pd.read_csv(io.StringIO(upload), low_memory=False)
     raw_text = pd.read_csv(io.StringIO(upload), dtype=str, keep_default_na=False)
@@ -73,8 +73,20 @@ def _sample_study_zip(monkeypatch) -> bytes:
         {"raw_column": "smoker", "matched_field": "SMOKER", "status": "accepted"},
         # A line break or quotes in a value must not break the file.
         {"raw_column": "note", "matched_field": "NOTE", "status": "accepted"},
+        # A coded column whose values carry terms is no longer a NUMBER.
+        {"raw_column": "grade", "matched_field": "TUMOR_GRADE", "status": "accepted"},
+        # cBioPortal requires its predefined OTHER_SAMPLE_ID to be STRING.
+        {"raw_column": "alt", "matched_field": "OTHER_SAMPLE_ID", "status": "accepted"},
     ]
-    _patch_repos(monkeypatch, mappings, {"name": "Validate Test Study"})
+    # The pipeline keys a term by the inferred value ("1.0"); a re-map after a
+    # schema edit by the uploaded text ("2").
+    ontology = [
+        {"field_name": "TUMOR_GRADE", "raw_value": "1.0", "ontology_term": "G1",
+         "status": "accepted", "reviewed_at": None},
+        {"field_name": "TUMOR_GRADE", "raw_value": "2", "ontology_term": "Grade 2",
+         "curator_term": "G2", "status": "accepted", "reviewed_at": "2026-10-08T12:00:00Z"},
+    ]
+    _patch_repos(monkeypatch, mappings, {"name": "Validate Test Study"}, ontology)
     return asyncio.run(
         exporter.export_cbioportal_study(None, "study1", raw_df, raw_text=raw_text)
     )
@@ -92,6 +104,13 @@ def test_generated_study_passes_validate_data(monkeypatch, tmp_path):
     study_dir = tmp_path / "study"
     study_dir.mkdir()
     zipfile.ZipFile(io.BytesIO(zip_bytes)).extractall(study_dir)
+
+    # The coded column carries its terms, in either spelling, and is STRING.
+    lines = (study_dir / "data_clinical_sample.txt").read_text().splitlines()
+    j = lines[4].split("\t").index("TUMOR_GRADE")
+    assert lines[2].split("\t")[j] == "STRING"
+    assert [line.split("\t")[j] for line in lines[5:]] == ["G1", "G2", "", "G1"]
+    assert lines[2].split("\t")[lines[4].split("\t").index("OTHER_SAMPLE_ID")] == "STRING"
 
     # Offline validation (-n / --no_portal_checks): structural + format checks
     # without a running cBioPortal instance.

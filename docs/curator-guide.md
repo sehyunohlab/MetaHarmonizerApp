@@ -254,7 +254,10 @@ completing the study:
   lines. Cells keep their uploaded text apart from accepted ontology terms, so
   a sample ID `0012` stays `0012` and an age `045` is not rewritten as `45.0`.
   Yes/no columns are written as `TRUE`/`FALSE`, the only values the cBioPortal
-  format accepts for a yes/no attribute. cBioPortal reads one line per row and
+  format accepts for a yes/no attribute. A column whose values became ontology
+  terms, and attributes cBioPortal defines as text (such as `SEX` and
+  `SAMPLE_TYPE`), are declared as text even when the uploaded values are
+  numbers or yes/no. cBioPortal reads one line per row and
   does not unquote values, so a line break or tab inside a value is written as a
   space and values are never wrapped in quotes.
 - **cBioPortal Study Folder (ZIP)** contains metadata and clinical data files
