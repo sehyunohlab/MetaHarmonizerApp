@@ -76,6 +76,10 @@ versioning once a stable `1.x` release is declared.
 - The Harmonized CSV and the export preview build faster on large uploads:
   each distinct value's ontology term is looked up once, not once per cell.
   On the 21,881-row sample the table builds in 0.44 s, down from 0.76 s.
+- Production health checks pause while an application or KB deployment holds
+  the deploy lock. Planned restarts no longer raise critical alerts, and the
+  automatic storage cleanup can't remove KB volumes a rollout has staged. A
+  deployment that holds the lock for over an hour is reported.
 
 ## [0.1.0] - 2026-08-19
 

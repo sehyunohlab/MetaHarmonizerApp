@@ -195,7 +195,8 @@ DEPLOY_REPO_ROOT="$PWD" \
 
 The command:
 
-1. acquires the lock shared with the KB updater;
+1. acquires the lock shared with the KB updater, which also pauses the 5-minute
+   health checks until it is released;
 2. verifies recorded commit, image, SPA, and database identity;
 3. pauses the KB timer and waits for any old updater process to finish;
 4. runs and verifies the encrypted backup service;
