@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+import numpy as np
 import pandas as pd
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -363,14 +364,7 @@ def harmonize_table(
         if lookup:
             # Value-level rewrite (U5): replace accepted raw values with their
             # confirmed ontology term. Unmatched values pass through.
-            terms = pd.Series(
-                [
-                    None if pd.isna(v) else _term(lookup, str(v), t)
-                    for v, t in zip(raw_df[raw], text)
-                ],
-                index=text.index,
-                dtype=object,
-            )
+            terms = _terms(lookup, raw_df[raw], text)
             hit = terms.notna()
             text = text.where(~hit, terms)
         # Neutralize spreadsheet formula-injection in this human-facing CSV.
@@ -437,6 +431,24 @@ def _term(lookup: Mapping[str, str], typed: str, text: str) -> str | None:
         if key in lookup:
             return lookup[key]
     return None
+
+
+def _terms(lookup: Mapping[str, str], values: pd.Series, text: pd.Series) -> pd.Series:
+    """:func:`_term` for a column: each cell's term, ``None`` where it has none.
+
+    ``values`` is the type-inferred column and ``text`` its uploaded text. A
+    missing cell never has a term. Each distinct pair of spellings is looked
+    up once, so a large upload costs a few lookups per value, not per cell.
+    """
+    typed_codes, typed_uniques = pd.factorize(values.astype(str), use_na_sentinel=False)
+    text_codes, text_uniques = pd.factorize(text, use_na_sentinel=False)
+    n = len(text_uniques)  # pair code = typed code * n + text code
+    pairs, codes = np.unique(typed_codes.astype(np.int64) * n + text_codes, return_inverse=True)
+    found = np.array(
+        [_term(lookup, typed_uniques[p // n], text_uniques[p % n]) for p in pairs], dtype=object
+    )[codes.ravel()]
+    found[values.isna().to_numpy()] = None
+    return pd.Series(found, index=text.index, dtype=object)
 
 
 async def _build_value_rewrites(

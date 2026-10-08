@@ -82,6 +82,17 @@ def test_rewrites_match_values_mapped_after_a_schema_edit():
     assert list(table.rewritten["sex"]) == [True, True, False]
 
 
+def test_missing_cells_are_never_rewritten():
+    # Even when a lookup holds the missing-value marker or pandas' "nan".
+    text, typed = _frames("id,site\na,NA\nb,lung\nc,\nd,NA\n")
+    rewrites = {"body_site": {"NA": "not applicable", "nan": "?", "": "?", "lung": "Lung"}}
+
+    table = harmonize_table(text, typed, [_m("site", "body_site")], rewrites)
+
+    assert list(table.frame["body_site"]) == ["NA", "Lung", "", "NA"]
+    assert list(table.rewritten["body_site"]) == [False, True, False, False]
+
+
 def test_formula_like_text_is_escaped_but_numbers_are_not():
     text, typed = _frames(SAMPLE)
     table = harmonize_table(text, typed, [_m("note", "comment")], {})
