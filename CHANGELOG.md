@@ -63,13 +63,19 @@ versioning once a stable `1.x` release is declared.
   (sample ID `0012` was written as `12`, age `045` as `45.0`), type
   `TRUE`/`FALSE` columns as BOOLEAN rather than NUMBER, and keep each row on one
   line: a line break or tab inside a value becomes a space, and values are no
-  longer quoted, since `validateData.py` reads quotes literally.
+  longer quoted, since `validateData.py` reads quotes literally. A numeric
+  column whose values became ontology terms, and the attributes cBioPortal
+  defines as text (such as `SEX`, `SAMPLE_TYPE` or `OTHER_SAMPLE_ID`), are
+  declared STRING; a coded `1`/`2` sex column failed validation before.
 - The KB refresh and engine upgrade workflows no longer fail after their work
   succeeded when GitHub won't let Actions open pull requests. They open an issue
   whose link opens the PR with its title and description filled in, and a newer
   bump closes the PRs and issues it supersedes. The October KB refresh
   republished `kb-latest`, which production deployed, but failed to open its
   `KB_BUNDLE_SHA256` bump.
+- The Harmonized CSV and the export preview build faster on large uploads:
+  each distinct value's ontology term is looked up once, not once per cell.
+  On the 21,881-row sample the table builds in 0.44 s, down from 0.76 s.
 
 ## [0.1.0] - 2026-08-19
 
