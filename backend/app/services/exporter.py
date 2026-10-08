@@ -14,7 +14,7 @@ import io
 import json
 import re
 import zipfile
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -192,7 +192,7 @@ def _find_id_column(df: pd.DataFrame, candidates: list[str]) -> str:
 # Column selection (shared by every export)
 
 
-def _mapping_target(mapping: dict[str, Any]) -> str | None:
+def mapping_target(mapping: dict[str, Any]) -> str | None:
     """The schema field a mapping fills in an export, if any.
 
     An accepted mapping fills the curator's field (else the suggestion) and a
@@ -223,7 +223,7 @@ def _select_sources(
     position = {column: i for i, column in enumerate(columns)}
     best: dict[str, tuple[tuple[bool, bool, float, int], str, str]] = {}
     for m in mappings:
-        raw, target = m.get("raw_column"), _mapping_target(m)
+        raw, target = m.get("raw_column"), mapping_target(m)
         if raw not in position or not target:
             continue
         rank = (
@@ -296,8 +296,8 @@ def harmonize_table(
     ``raw_text`` holds the upload's original cell text and ``raw_df`` the same
     file read with type inference. Output cells keep the original text unless
     they are rewritten or escaped, so numbers and missing-value markers are not
-    reformatted. Rewrite lookups use the inferred values, which is how the
-    pipeline records an ontology mapping's ``raw_value``.
+    reformatted. A value's ontology row is found by its inferred or its
+    original spelling (see :func:`_term`).
     """
     # One source column per schema field (see _select_sources): a CSV or
     # cBioPortal file can't carry duplicate column names, and the losers are
@@ -308,7 +308,7 @@ def harmonize_table(
     proposed = {
         m["raw_column"]: target
         for m in mappings
-        if m["raw_column"] in raw_df.columns and (target := _mapping_target(m))
+        if m["raw_column"] in raw_df.columns and (target := mapping_target(m))
     }
     mapped_targets = set(rename_map.values())
     status_by_raw = {m["raw_column"]: m["status"] for m in mappings}
@@ -354,7 +354,14 @@ def harmonize_table(
         if lookup:
             # Value-level rewrite (U5): replace accepted raw values with their
             # confirmed ontology term. Unmatched values pass through.
-            terms = raw_df[raw].map(lambda v, _m=lookup: _m.get(str(v)) if pd.notna(v) else None)
+            terms = pd.Series(
+                [
+                    None if pd.isna(v) else _term(lookup, str(v), t)
+                    for v, t in zip(raw_df[raw], text)
+                ],
+                index=text.index,
+                dtype=object,
+            )
             hit = terms.notna()
             text = text.where(~hit, terms)
         # Neutralize spreadsheet formula-injection in this human-facing CSV.
@@ -398,18 +405,49 @@ async def export_harmonized_csv(
     return (await build_harmonized_table(db, study_id, raw_df, raw_text)).to_csv()
 
 
+class FieldRewrites(dict[str, str]):
+    """One field's ``raw_value -> confirmed term`` lookup. ``reviewed`` holds
+    the raw values whose term comes from a curator's decision."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.reviewed: set[str] = set()
+
+
+def _term(lookup: Mapping[str, str], typed: str, text: str) -> str | None:
+    """A cell's confirmed ontology term, if it has one.
+
+    ``typed`` is the cell as the type-inferred frame spells it (``1.0``), which
+    is how the pipeline keys an ontology row; ``text`` is the uploaded text
+    (``1``), which is how a re-map after a schema edit keys it. A curator's
+    decision wins over the engine's; otherwise the pipeline's spelling does.
+    """
+    keys = (typed,) if text == typed else (typed, text)
+    reviewed = getattr(lookup, "reviewed", ())
+    for key in sorted(keys, key=lambda k: k not in reviewed):
+        if key in lookup:
+            return lookup[key]
+    return None
+
+
 async def _build_value_rewrites(
     db: AsyncSession, study_id: str
-) -> dict[str, dict[str, str]]:
+) -> dict[str, FieldRewrites]:
     """Map each harmonized field to its accepted ``raw_value -> term`` rewrites."""
-    rewrites: dict[str, dict[str, str]] = {}
+    rewrites: dict[str, FieldRewrites] = {}
     for o in await ontology_repo.get_ontology_mappings(db, study_id):
         if o["status"] != "accepted":
             continue
         term = o.get("curator_term") or o.get("ontology_term")
         if not term:
             continue
-        rewrites.setdefault(o["field_name"], {})[str(o["raw_value"])] = str(term)
+        lookup = rewrites.setdefault(o["field_name"], FieldRewrites())
+        raw, reviewed = str(o["raw_value"]), bool(o.get("reviewed_at"))
+        if raw in lookup.reviewed and not reviewed:
+            continue  # a curator's term beats an engine row for the same value
+        lookup[raw] = str(term)
+        if reviewed:
+            lookup.reviewed.add(raw)
     return rewrites
 
 
@@ -424,6 +462,9 @@ _HIGH_PRIORITY_ATTRS: set[str] = {
 def _infer_dtype(series: pd.Series) -> str:
     """Infer a cBioPortal data type (NUMBER / BOOLEAN / STRING) for a column."""
     non_null = series.dropna()
+    # TRUE/FALSE columns are read as booleans, which also pass as numbers.
+    if len(non_null) and pd.api.types.infer_dtype(non_null, skipna=True) == "boolean":
+        return "BOOLEAN"
     try:
         pd.to_numeric(non_null)
         return "NUMBER"
@@ -455,7 +496,7 @@ def _clinical_column_specs(
     allowed = [
         m
         for m in mappings
-        if not (target := _mapping_target(m))
+        if not (target := mapping_target(m))
         or not _is_banned(_cbio_id(target), str(m.get("raw_column", "")))
     ]
     winners = _select_sources(allowed, list(raw_df.columns), key=_cbio_id)
@@ -506,12 +547,18 @@ def _write_clinical_tsv(
     cols: list[dict[str, Any]],
     raw_df: pd.DataFrame,
     value_rewrites: dict[str, dict[str, str]] | None = None,
+    raw_text: pd.DataFrame | None = None,
 ) -> str:
     """Write a cBioPortal 5-row-header clinical TSV for the given column specs.
 
     ``value_rewrites`` maps a target attribute id (e.g. ``SEX``) to a
     ``raw_value -> confirmed term`` lookup so the exported cells carry the
     curator-resolved values (U5), not the raw ones.
+
+    ``raw_text`` is the upload's original cell text (indexed like the full
+    file), so a cell that isn't rewritten keeps its uploaded text: sample
+    ``0012`` stays ``0012``, as in the Harmonized CSV. Missing values are
+    written empty.
     """
     rewrites = value_rewrites or {}
     targets = {c["target"] for c in cols}
@@ -520,37 +567,29 @@ def _write_clinical_tsv(
         for c in cols
         if c["target"].endswith("_STATUS") and f"{c['target'][:-7]}_MONTHS" in targets
     }
-    buf = io.StringIO()
-    writer = csv.writer(buf, delimiter="\t", lineterminator="\n")
-
-    def _header_row(values: list[str]) -> None:
-        # Per spec, only the FIRST field of each metadata row carries the '#'.
-        row = list(values)
-        if row:
-            row[0] = "#" + row[0]
-        writer.writerow(row)
+    text_df = (raw_text if raw_text is not None else _text_view(raw_df)).loc[raw_df.index]
+    sources = {c["raw"] for c in cols if c["raw"] in raw_df.columns}
+    typed_cells = {src: raw_df[src].tolist() for src in sources}
+    text_cells = {src: text_df[src].tolist() for src in sources}
 
     rows: list[list[str]] = []
-    for _, row in raw_df.iterrows():
+    for i in range(len(raw_df)):
         out_row: list[str] = []
         for c in cols:
-            raw_val = row.get(c["raw"], "")
-            target_id = c["target"]
+            src, target_id = c["raw"], c["target"]
+            value = typed_cells[src][i] if src in sources else None
+            text = "" if value is None or pd.isna(value) else str(text_cells[src][i])
             if target_id in ("PATIENT_ID", "SAMPLE_ID"):
-                out_row.append(_sanitize_id(raw_val))
+                out_row.append(_sanitize_id(text))
             elif target_id in survival_status_with_months:
-                out_row.append(_normalize_survival(raw_val))
+                out_row.append(_tsv_cell(_normalize_survival(text)))
+            elif not text:
+                out_row.append("")
             else:
-                # Apply the curator-confirmed value rewrite (U5) so the cell
-                # carries the resolved term; fall back to the raw value. pandas
-                # NaN is not None, so guard with isna to avoid the literal "nan".
-                if pd.isna(raw_val):
-                    out_row.append("")
-                else:
-                    lookup = rewrites.get(target_id)
-                    text = str(raw_val)
-                    text = lookup.get(text, text) if lookup else text
-                    out_row.append(_strip_smart_quotes(text))
+                # Apply the curator-confirmed value rewrite (U5).
+                lookup = rewrites.get(target_id)
+                term = _term(lookup, str(value), text) if lookup else None
+                out_row.append(_tsv_cell(term if term is not None else text))
         rows.append(out_row)
 
     # cBioPortal accepts only TRUE / FALSE in a BOOLEAN attribute: write yes/no
@@ -568,14 +607,28 @@ def _write_clinical_tsv(
         else:
             dtypes[j] = "STRING"
 
-    _header_row([c["display"] for c in cols])
-    _header_row([c["description"] for c in cols])
-    _header_row(dtypes)
-    _header_row([str(c["priority"]) for c in cols])
-    writer.writerow([c["target"] for c in cols])  # attribute IDs (no '#')
-    writer.writerows(rows)
+    # Plain tab-separated lines: cBioPortal reads quotation marks as part of a
+    # value, so cells are never quoted (_tsv_cell keeps them on one line).
+    # Per spec, only the FIRST field of each metadata row carries the '#'.
+    header_rows = [
+        [c["display"] for c in cols],
+        [c["description"] for c in cols],
+        dtypes,
+        [str(c["priority"]) for c in cols],
+    ]
+    lines = ["#" + "\t".join(row) for row in header_rows]
+    lines.append("\t".join(c["target"] for c in cols))  # attribute IDs (no '#')
+    lines.extend("\t".join(row) for row in rows)
+    return "".join(line + "\n" for line in lines)
 
-    return buf.getvalue()
+
+_TSV_BREAKS = re.compile(r"[\t\r\n]+")
+
+
+def _tsv_cell(text: str) -> str:
+    """A clinical-file value on one line: tabs and line breaks become a space,
+    curly quotes straight ones (checklist: no smart quotes)."""
+    return _strip_smart_quotes(_TSV_BREAKS.sub(" ", text))
 
 
 def _rewrites_by_target(
@@ -586,7 +639,10 @@ def _rewrites_by_target(
 
 
 async def export_cbioportal(
-    db: AsyncSession, study_id: str, raw_df: pd.DataFrame
+    db: AsyncSession,
+    study_id: str,
+    raw_df: pd.DataFrame,
+    raw_text: pd.DataFrame | None = None,
 ) -> str:
     """
     Produce a single cBioPortal-format clinical data file (all attributes in
@@ -595,7 +651,8 @@ async def export_cbioportal(
 
     Header rows: display names, descriptions, data types, priority, then the
     UPPER_CASE attribute IDs. PATIENT_ID and SAMPLE_ID are always present.
-    Curator-confirmed value rewrites (U5) are applied to the cells.
+    Curator-confirmed value rewrites (U5) are applied to the cells; other cells
+    keep the uploaded text (``raw_text``) when given.
     """
     mappings = await mappings_repo.get_mappings(db, study_id)
     specs = _clinical_column_specs(mappings, raw_df)
@@ -618,7 +675,7 @@ async def export_cbioportal(
         *specs,
     ]
     rewrites = _rewrites_by_target(await _build_value_rewrites(db, study_id))
-    return _write_clinical_tsv(cols, raw_df, rewrites)
+    return _write_clinical_tsv(cols, raw_df, rewrites, raw_text)
 
 
 # cBioPortal study folder (validateData.py-ready)
@@ -677,18 +734,19 @@ _LICENSE_TEXT = (
 )
 
 
-def _sample_ids_for_case_list(raw_df: pd.DataFrame, sample_src: str) -> list[str]:
-    """Sanitized, de-duplicated sample IDs in first-seen order."""
-    if sample_src not in raw_df.columns:
+def _id_values(raw_df: pd.DataFrame, raw_text: pd.DataFrame, column: str) -> list[str]:
+    """A column's cells as cBioPortal IDs, from the uploaded text ("" if missing)."""
+    if column not in raw_df.columns:
         return []
-    seen: set[str] = set()
-    out: list[str] = []
-    for v in raw_df[sample_src]:
-        sid = _sanitize_id(v)
-        if sid and sid not in seen:
-            seen.add(sid)
-            out.append(sid)
-    return out
+    return [
+        "" if pd.isna(value) else _sanitize_id(text)
+        for value, text in zip(raw_df[column], raw_text[column])
+    ]
+
+
+def _sample_ids_for_case_list(raw_ids: list[str]) -> list[str]:
+    """Non-empty sample IDs, de-duplicated in first-seen order."""
+    return list(dict.fromkeys(sid for sid in raw_ids if sid))
 
 
 async def export_cbioportal_study(
@@ -696,6 +754,7 @@ async def export_cbioportal_study(
     study_id: str,
     raw_df: pd.DataFrame,
     cancer_study_identifier: str | None = None,
+    raw_text: pd.DataFrame | None = None,
 ) -> bytes:
     """
     Produce a cBioPortal study folder as a zip, ready for ``validateData.py``:
@@ -745,16 +804,23 @@ async def export_cbioportal_study(
     sample_attr_specs = [s for s in specs if not _is_patient_level(s["target"])]
 
     # Patient file: one row per unique patient (cBioPortal requires unique
-    # PATIENT_ID rows). Sample file: one row per sample, PATIENT_ID links back.
+    # PATIENT_ID rows), by the ID as exported. Sample file: one row per sample,
+    # PATIENT_ID links back.
     patient_cols = [patient_id_spec, *patient_attr_specs]
     sample_cols = [patient_id_spec, sample_id_spec, *sample_attr_specs]
 
-    patient_df = raw_df.drop_duplicates(subset=[patient_src]) if patient_src in raw_df.columns else raw_df
+    text_df = raw_text if raw_text is not None else _text_view(raw_df)
+    patient_ids = _id_values(raw_df, text_df, patient_src)
+    patient_df = (
+        raw_df[~pd.Series(patient_ids, index=raw_df.index).duplicated().to_numpy()]
+        if patient_ids
+        else raw_df
+    )
 
     rewrites = _rewrites_by_target(await _build_value_rewrites(db, study_id))
-    data_clinical_patient = _write_clinical_tsv(patient_cols, patient_df, rewrites)
-    data_clinical_sample = _write_clinical_tsv(sample_cols, raw_df, rewrites)
-    sample_ids = _sample_ids_for_case_list(raw_df, sample_src)
+    data_clinical_patient = _write_clinical_tsv(patient_cols, patient_df, rewrites, text_df)
+    data_clinical_sample = _write_clinical_tsv(sample_cols, raw_df, rewrites, text_df)
+    sample_ids = _sample_ids_for_case_list(_id_values(raw_df, text_df, sample_src))
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -970,7 +1036,10 @@ def _parse_clinical_columns(tsv_text: str) -> dict[str, list[str]]:
 
 
 async def linkml_check(
-    db: AsyncSession, study_id: str, raw_df: pd.DataFrame
+    db: AsyncSession,
+    study_id: str,
+    raw_df: pd.DataFrame,
+    raw_text: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
     """Run the LinkML controlled-vocabulary gate on the harmonized output.
 
@@ -980,7 +1049,7 @@ async def linkml_check(
     """
     from app.services import linkml_gate
 
-    tsv = await export_cbioportal(db, study_id, raw_df)
+    tsv = await export_cbioportal(db, study_id, raw_df, raw_text)
     columns = _parse_clinical_columns(tsv)
     violations = linkml_gate.validate_clinical_columns(columns)
     return {"ok": not violations, "violations": violations}

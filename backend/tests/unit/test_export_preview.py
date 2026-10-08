@@ -61,6 +61,27 @@ def test_rewrites_match_inferred_values_but_keep_unmatched_text():
     assert list(table.rewritten["sex"]) == [True, True, False, False]
 
 
+def test_rewrites_match_values_mapped_after_a_schema_edit():
+    # A re-map after a schema edit keys rows by the uploaded text ("1", "TRUE"),
+    # not the inferred value ("1.0", "True"); a curator's term wins over the
+    # engine's when a value has a row in both spellings.
+    from app.services.exporter import FieldRewrites
+
+    text, typed = _frames("id,code,smoker\na,1,TRUE\nb,2,FALSE\nc,,\n")
+    sex = FieldRewrites()
+    sex.update({"1": "Male", "2.0": "engine term", "2": "Female"})
+    sex.reviewed.add("2")
+
+    table = harmonize_table(
+        text, typed, [_m("code", "sex"), _m("smoker", "smoking")],
+        {"sex": sex, "smoking": {"TRUE": "Smoker"}},
+    )
+
+    assert list(table.frame["sex"]) == ["Male", "Female", ""]
+    assert list(table.frame["smoking"]) == ["Smoker", "FALSE", ""]
+    assert list(table.rewritten["sex"]) == [True, True, False]
+
+
 def test_formula_like_text_is_escaped_but_numbers_are_not():
     text, typed = _frames(SAMPLE)
     table = harmonize_table(text, typed, [_m("note", "comment")], {})
@@ -182,10 +203,10 @@ def test_preview_rows_page_and_filters():
         {"column": 3, "before": "=1+1", "reason": "escaped"},
     ]
 
-    only_comment = build_preview("s1", text, table, column="comment")["rows"]
+    only_comment = build_preview("s1", text, table, changed_only=True, column="comment")["rows"]
     assert only_comment["total"] == 1 and only_comment["items"][0]["line"] == 2
 
-    everything = build_preview("s1", text, table, changed_only=False, column="comment")["rows"]
+    everything = build_preview("s1", text, table, column="comment")["rows"]
     assert everything["total"] == 4
 
 
@@ -203,7 +224,10 @@ def test_preview_with_renames_only_has_no_changed_rows():
 
     assert preview["summary"]["changed_cells"] == 0
     assert preview["summary"]["renamed"] == 2
-    assert preview["rows"]["total"] == 0 and preview["rows"]["items"] == []
+    # Every row is listed by default; asking for changed rows lists none.
+    assert [r["values"] for r in preview["rows"]["items"]] == [["x", "1"], ["y", "2"]]
+    changed = build_preview("s1", text, table, changed_only=True)["rows"]
+    assert changed["total"] == 0 and changed["items"] == []
 
 
 def test_preview_when_every_column_is_dropped():

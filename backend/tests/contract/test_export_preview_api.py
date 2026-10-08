@@ -157,8 +157,15 @@ async def test_preview_matches_the_download_and_does_not_mark_export(env):
         ]
         rows = body["rows"]
         assert rows["columns"] == ["sample_id", "sex", "age_years", "comment"]
-        assert [item["line"] for item in rows["items"]] == [1, 3]
-        assert rows["items"][0]["changes"] == [
+        assert [item["line"] for item in rows["items"]] == [1, 2, 3]  # every row by default
+        assert rows["items"][1]["changes"] == []
+        changed = (
+            await c.get(
+                f"/api/v1/export/{sid}/preview", params={"changed_only": "true"}, headers=headers
+            )
+        ).json()["rows"]
+        assert [item["line"] for item in changed["items"]] == [1, 3]
+        assert changed["items"][0]["changes"] == [
             {"column": 1, "before": "F", "reason": "ontology"},
             {"column": 3, "before": "=cmd", "reason": "escaped"},
         ]
@@ -212,9 +219,11 @@ async def test_preview_validates_paging_and_column(env):
         unknown = await c.get(url, params={"column": "gender"}, headers=headers)
         assert unknown.status_code == 422  # filters use export column names
 
-        focused = (await c.get(url, params={"column": "comment"}, headers=headers)).json()
+        focused = (
+            await c.get(url, params={"column": "comment", "changed_only": "true"}, headers=headers)
+        ).json()
         assert focused["rows"]["total"] == 1
         assert focused["rows"]["items"][0]["line"] == 1
 
         beyond = (await c.get(url, params={"offset": 10}, headers=headers)).json()
-        assert beyond["rows"]["total"] == 2 and beyond["rows"]["items"] == []
+        assert beyond["rows"]["total"] == 3 and beyond["rows"]["items"] == []

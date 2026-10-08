@@ -240,3 +240,66 @@ async def test_ontology_accept_and_reject_apply_to_next_study(env):
             assert by_value["lung"].curator_term == "Lung"
             assert by_value["lung"].curator_id == "UBERON:0002048"
             assert by_value["noise"].status == "rejected"
+
+
+async def test_accept_and_reject_act_on_the_field_the_review_page_shows(env):
+    """A curator's edit survives a single reject and a single accept, as it
+    survives a batch decision: every decision acts on the field the review
+    page shows (the edit, else the suggestion)."""
+    make_client, domain, calls = env
+    async with make_client() as client:
+        await register_and_login(client, f"admin3@{domain}")
+        curator = await register_and_login(client, f"edits@{domain}")
+        headers = {"Authorization": "Bearer " + curator["access_token"]}
+        _, ids = await _seed(curator["user"]["id"])
+        single, mixed = ids[0], ids[1]  # site -> body_site, gender -> sex
+
+        for mid in (single, mixed):
+            response = await client.post(
+                f"/api/v1/mappings/{mid}/edit",
+                headers=headers,
+                json={"new_field": "disease", "note": "curated"},
+            )
+            assert response.status_code == 200
+
+        # Single reject keeps the edit (the batch reject always has).
+        response = await client.post(f"/api/v1/mappings/{single}/reject", headers=headers)
+        body = response.json()
+        assert (body["status"], body["curator_field"], body["curator_note"]) == (
+            "rejected", "disease", "curated",
+        )
+        assert (calls[-1]["raw_column"], calls[-1]["old_field"], calls[-1]["new_field"]) == (
+            "site", "disease", None,
+        )
+        response = await client.post(
+            "/api/v1/mappings/batch",
+            headers=headers,
+            json={"mapping_ids": [mixed], "action": "rejected"},
+        )
+        assert response.status_code == 200
+
+        # Single accept restores the edited field, whichever way it was rejected.
+        for mid, raw in ((single, "site"), (mixed, "gender")):
+            response = await client.post(f"/api/v1/mappings/{mid}/accept", headers=headers)
+            body = response.json()
+            assert (body["status"], body["curator_field"], body["curator_note"]) == (
+                "accepted", "disease", "curated",
+            )
+            assert (calls[-1]["raw_column"], calls[-1]["old_field"], calls[-1]["new_field"]) == (
+                raw, "disease", "disease",
+            )
+
+        async with db_session.SessionLocal() as db:
+            learned = {
+                row.source_key: (row.decision, row.target_field)
+                for row in await db.scalars(
+                    sa.select(LearnedDecision).where(
+                        LearnedDecision.owner_id == curator["user"]["id"],
+                        LearnedDecision.kind == "schema",
+                    )
+                )
+            }
+        assert learned == {
+            ld_repo.schema_key("site"): ("accept", "disease"),
+            ld_repo.schema_key("gender"): ("accept", "disease"),
+        }

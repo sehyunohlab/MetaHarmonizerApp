@@ -45,7 +45,7 @@ export function ChangedValuesGrid({
   fetching: boolean;
   onQueryChange: (query: ExportPreviewQuery) => void;
 }) {
-  const [changedColumnsOnly, setChangedColumnsOnly] = useState(true);
+  const [changedColumnsOnly, setChangedColumnsOnly] = useState(false);
   const changedCells = changedCellsByTarget(columns);
   const sources = renamedFrom(columns);
   const visible = visibleColumnIndexes(rows.columns, changedCells, {
@@ -61,8 +61,8 @@ export function ChangedValuesGrid({
     <Card>
       <CardHeader
         icon={<Rows3 className="h-4 w-4" />}
-        title="Changed values"
-        description="Exported values next to your upload. Changed cells show the uploaded value struck through."
+        title="Exported values"
+        description="Every exported value next to your upload. Changed cells show the uploaded value struck through."
         action={fetching ? <Spinner className="h-4 w-4 text-slate-400" /> : undefined}
       />
 
@@ -181,7 +181,7 @@ export function ChangedValuesGrid({
         <div
           tabIndex={0}
           role="region"
-          aria-label="Changed values table"
+          aria-label="Exported values table"
           className={cn(
             'relative max-h-[36rem] overflow-auto transition-opacity focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500/40',
             fetching && 'opacity-60',
