@@ -190,14 +190,42 @@ def test_preview_summary_and_grouped_value_changes():
     assert by_source["id"]["changed_cells"] == 0 and by_source["id"]["value_changes"] == []
 
 
-def test_preview_caps_listed_value_changes(monkeypatch):
+def test_preview_lists_every_ontology_change_and_caps_only_escapes(monkeypatch):
     monkeypatch.setattr(export_preview, "MAX_VALUE_CHANGES", 1)
-    text, table = _preview_fixture()
+    text, typed = _frames("id,sex,note\n1,F,=1\n2,M,=2\n3,F,ok\n")
+    table = harmonize_table(
+        text, typed, [_m("id", "sample_id"), _m("sex", "sex"), _m("note", "comment")],
+        {"sex": {"F": "Female", "M": "Male"}},
+    )
 
-    sex = next(c for c in build_preview("s1", text, table)["columns"] if c["source"] == "sex")
+    by_source = {c["source"]: c for c in build_preview("s1", text, table)["columns"]}
 
-    assert [v["before"] for v in sex["value_changes"]] == ["F"]  # most frequent first
-    assert sex["more_value_changes"] == 1
+    assert [v["after"] for v in by_source["sex"]["value_changes"]] == ["Female", "Male"]
+    assert by_source["sex"]["more_value_changes"] == 0
+    assert [v["before"] for v in by_source["note"]["value_changes"]] == ["=1"]
+    assert by_source["note"]["more_value_changes"] == 1
+
+
+def test_every_rename_and_ontology_change_is_reported():
+    # 19 columns renamed by the schema mapping and 30 values rewritten to terms.
+    names = [f"col_{i}" for i in range(19)]
+    values = [f"value {i}" for i in range(30)]
+    header = ",".join([*names, "site"])
+    lines = [",".join([*(f"{n}-{r}" for n in names), values[r % 30]]) for r in range(60)]
+    text, typed = _frames("\n".join([header, *lines]) + "\n")
+    mappings = [*(_m(n, f"field_{i}") for i, n in enumerate(names)), _m("site", "site")]
+    rewrites = {"site": {v: f"Term {i}" for i, v in enumerate(values)}}
+    table = harmonize_table(text, typed, mappings, rewrites)
+
+    preview = build_preview("s1", text, table)
+
+    assert preview["summary"]["renamed"] == 19
+    site = next(c for c in preview["columns"] if c["source"] == "site")
+    assert len(site["value_changes"]) == 30 and site["more_value_changes"] == 0
+    assert {(v["before"], v["after"]) for v in site["value_changes"]} == {
+        (v, f"Term {i}") for i, v in enumerate(values)
+    }
+    assert all(v["reason"] == "ontology" for v in site["value_changes"])
 
 
 def test_preview_rows_page_and_filters():

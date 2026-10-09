@@ -127,10 +127,10 @@ export function changesByColumn(row: ExportPreviewRow): Map<number, ExportCellCh
 }
 
 /** Indexes of the grid columns to display. A focused column wins; otherwise
- *  optionally hide columns without any change. */
+ *  optionally only the changed columns (see {@link changedColumnNames}). */
 export function visibleColumnIndexes(
   columns: string[],
-  changedCells: Record<string, number>,
+  changed: ReadonlySet<string>,
   options: { changedOnly: boolean; focus: string | null },
 ): number[] {
   if (options.focus !== null) {
@@ -138,7 +138,22 @@ export function visibleColumnIndexes(
     return index === -1 ? [] : [index];
   }
   const all = columns.map((_, index) => index);
-  return options.changedOnly ? all.filter((index) => (changedCells[columns[index]] ?? 0) > 0) : all;
+  return options.changedOnly ? all.filter((index) => changed.has(columns[index])) : all;
+}
+
+/** Export columns that differ from the upload: renamed by their mapping, or
+ *  holding at least one changed value. */
+export function changedColumnNames(columns: ExportColumnChange[]): Set<string> {
+  const names = new Set<string>();
+  for (const column of columns) {
+    if (column.target && (column.action === 'renamed' || column.changed_cells > 0)) names.add(column.target);
+  }
+  return names;
+}
+
+/** Distinct before → after changes in a column, listed or not. */
+export function distinctValueChanges(column: ExportColumnChange): number {
+  return column.value_changes.length + column.more_value_changes;
 }
 
 /** Export column → original column name, for renamed columns only. */

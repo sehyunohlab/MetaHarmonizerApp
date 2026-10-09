@@ -69,6 +69,7 @@ export function ChangePreview({ studyId }: { studyId: string }) {
         <ChangedValuesGrid
           rows={rows}
           columns={columns}
+          changedRows={summary.changed_rows}
           query={query}
           fetching={preview.isFetching}
           onQueryChange={setQuery}

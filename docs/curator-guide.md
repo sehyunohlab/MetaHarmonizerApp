@@ -220,7 +220,9 @@ export anything or mark the study as exported.
   cell values change.
 - **Column changes** lists every uploaded column with its export name, its
   mapping decision, and why a column is not exported. Select a column's changed
-  count to see each distinct value change, such as `F → female`.
+  count to see each distinct value change, such as `F → female`. Every ontology
+  term change is listed; only spreadsheet-safe escapes beyond the first 25 per
+  column are counted instead of listed.
 - A column is **Not exported** (left out of the Harmonized CSV) when it is not
   mapped to a schema field, or when another column already maps to the same
   field. A CSV cannot repeat a column name, so one column per field is kept: a
@@ -235,12 +237,16 @@ export anything or mark the study as exported.
   unless a mapped column is already exported under that name. The cBioPortal
   files leave it out.
 - **Exported values** lists every row and every exported column of the
-  Harmonized CSV. Changed cells show the exported value with the uploaded value
-  struck through beneath it, colored by cause: an accepted ontology term, or an
+  Harmonized CSV. A renamed column's header is highlighted, with its uploaded
+  name struck through beneath the schema field name. Changed cells show the
+  exported value with the uploaded value struck through beneath it, colored by
+  cause: an accepted ontology term, or an
   apostrophe added so spreadsheets treat formula-like text (such as values
   starting with `=`, `+`, `-`, or `@`, but not plain numbers like `-5`) as
-  text. Select **Changed rows only**, **Changed columns only**, or a column to
-  narrow the grid to what changed.
+  text. **Changed rows only** keeps rows with a changed value; **Changed
+  columns only** keeps columns that were renamed or have a changed value. Each
+  shows how many there are. **Values changed in** narrows the grid to one
+  column's changed values.
 - A warning appears when exported columns still use unreviewed mapping
   suggestions; review them first so the field names are final.
 

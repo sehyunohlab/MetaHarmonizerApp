@@ -38,8 +38,8 @@ class ExportColumnChange(BaseModel):
     drop_reason: Literal["no_target", "duplicate_target", "name_conflict"] | None
     conflicts_with: str | None  # dropped: the source column that took its export name
     changed_cells: int
-    value_changes: list[ExportValueChange]
-    more_value_changes: int  # distinct changes not listed in value_changes
+    value_changes: list[ExportValueChange]  # every ontology rewrite, then the most frequent others
+    more_value_changes: int  # distinct non-ontology changes not listed in value_changes
 
 
 class ExportCellChange(BaseModel):
