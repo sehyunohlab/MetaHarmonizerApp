@@ -88,6 +88,11 @@ versioning once a stable `1.x` release is declared.
   the deploy lock. Planned restarts no longer raise critical alerts, and the
   automatic storage cleanup can't remove KB volumes a rollout has staged. A
   deployment that holds the lock for over an hour is reported.
+- Fixed engine upgrades failing at install. Removing the engine's unused NLTK
+  dependency rewrote the wheel's whole METADATA file and wrapped a long
+  requirement in the middle of its marker, so pip rejected the wheel built from
+  upstream `9c7f100` on Oct 9. Only the NLTK line is removed now; every other
+  byte is kept.
 
 ## [0.1.0] - 2026-08-19
 

@@ -101,17 +101,32 @@ def _metadata_dependencies(metadata: bytes) -> list[str]:
 
 
 def _without_dependency(metadata: bytes) -> bytes:
-    message = _metadata_message(metadata)
-    requirements = message.get_all("Requires-Dist", [])
-    retained = [
-        requirement
-        for requirement in requirements
-        if _canonical_requirement_name(requirement) != DEPENDENCY
-    ]
-    del message["Requires-Dist"]
-    for requirement in retained:
-        message["Requires-Dist"] = requirement
-    return message.as_bytes(policy=compat32)
+    """``metadata`` without its Requires-Dist lines for the dependency.
+
+    Every other byte is kept. Re-serializing the file through ``email`` would
+    re-wrap long headers, and a wrapped marker (``...];`` then ``extra == "all"``
+    on the next line) is an invalid requirement to pip.
+    """
+    lines = metadata.splitlines(keepends=True)
+    kept: list[bytes] = []
+    i = 0
+    while i < len(lines):
+        if not lines[i].rstrip(b"\r\n"):  # the empty line before the description body
+            kept.extend(lines[i:])
+            break
+        field = [lines[i]]
+        i += 1
+        while i < len(lines) and lines[i][:1] in (b" ", b"\t"):  # folded continuation
+            field.append(lines[i])
+            i += 1
+        name, _, value = b"".join(field).decode("utf-8").partition(":")
+        if (
+            name.strip().lower() == "requires-dist"
+            and _canonical_requirement_name(" ".join(value.split())) == DEPENDENCY
+        ):
+            continue
+        kept.extend(field)
+    return b"".join(kept)
 
 
 def _record_hash(payload: bytes) -> str:
