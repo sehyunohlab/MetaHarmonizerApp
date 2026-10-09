@@ -138,6 +138,70 @@ def file_age_hours(path: Path, *, now: datetime | None = None) -> float | None:
     return max((current - modified).total_seconds() / 3600, 0.0)
 
 
+# deploy_revision.sh and deploy_kb_bundle.sh hold an exclusive flock on this
+# file for their whole run.
+DEPLOY_LOCK_FILE = Path("/tmp/metaharmonizer-deploy.lock")
+PROC_LOCKS = Path("/proc/locks")
+
+
+def lock_file_id(path: Path) -> str | None:
+    """``major:minor:inode`` of ``path`` as /proc/locks prints it."""
+    if not hasattr(os, "major"):  # not Linux, so there is no /proc/locks either
+        return None
+    try:
+        status = path.stat()
+    except OSError:
+        return None
+    return f"{os.major(status.st_dev):02x}:{os.minor(status.st_dev):02x}:{status.st_ino}"
+
+
+def deployment_lock_owner(lock_file: Path, proc_locks: Path = PROC_LOCKS) -> int | None:
+    """The PID that took the flock on ``lock_file``, or ``None`` if it is free.
+
+    Reading /proc/locks observes the lock without taking it, so a deployment
+    starting at that moment is never turned away. The deploy tools take the
+    lock with ``flock -n``, which exits at once, so the PID names a finished
+    process; it only tells one deployment from the next.
+    """
+    file_id = lock_file_id(lock_file)
+    if file_id is None:
+        return None
+    try:
+        table = proc_locks.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in table.splitlines():
+        fields = line.split()
+        # "->" marks a process waiting for the lock rather than holding it.
+        if "->" in fields or file_id not in fields:
+            continue
+        try:
+            return int(fields[fields.index(file_id) - 1])
+        except ValueError:
+            return -1  # held, owner not shown
+    return None
+
+
+def deployment_minutes(state_dir: Path, *, now: float | None = None) -> float | None:
+    """How long checks have seen the current deployment hold the lock, or ``None``."""
+    lock_file = Path(os.getenv("OPS_DEPLOY_LOCK_FILE", str(DEPLOY_LOCK_FILE)))
+    state_path = state_dir / "deployment.json"
+    owner = deployment_lock_owner(lock_file)
+    if owner is None:
+        state_path.unlink(missing_ok=True)
+        return None
+    current = time.time() if now is None else now
+    seen = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
+    if seen.get("owner") != owner:
+        seen = {"owner": owner, "since": current}
+        write_json(state_path, seen)
+    return max((current - float(seen["since"])) / 60, 0.0)
+
+
+def deployment_pause_limit_minutes() -> float:
+    return float(os.getenv("OPS_DEPLOY_PAUSE_MAX_MINUTES", "60"))
+
+
 def database_metrics(repo: Path) -> dict[str, int]:
     sql = """select json_build_object(
       'database_bytes', pg_database_size(current_database()),
@@ -314,6 +378,15 @@ def assess(check: dict[str, Any], *, require_backup: bool, disk_warning_streak: 
     kb_result = check["kb_service"].get("Result")
     if kb_result not in {"success", ""}:
         add("warning", "kb_update_failed", f"Last KB update service result is {kb_result}.")
+    deploying = check.get("deployment_minutes")
+    if deploying is not None:
+        # The limit, not the running total, keeps the alert fingerprint stable.
+        add(
+            "warning",
+            "deployment_overrun",
+            f"A deployment has held the deploy lock for over {deployment_pause_limit_minutes():.0f} "
+            "minutes; checks resumed.",
+        )
     return issues
 
 
@@ -670,7 +743,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "check":
+        # A deployment restarts services and swaps KB volumes on purpose:
+        # checking then raises false alarms, and the cleanup below could remove
+        # KB volumes a rollout has staged but not attached yet.
+        deploying = deployment_minutes(args.state_dir)
+        if deploying is not None and deploying <= deployment_pause_limit_minutes():
+            print(json.dumps({
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "paused": f"A deployment holds the deploy lock (seen for {deploying:.0f} min); check skipped.",
+            }))
+            return 0
         result = collect_check(args.repo)
+        result["deployment_minutes"] = deploying
         previous_path = args.state_dir / "latest-check.json"
         previous = json.loads(previous_path.read_text(encoding="utf-8")) if previous_path.exists() else None
         add_counter_deltas(result, previous)

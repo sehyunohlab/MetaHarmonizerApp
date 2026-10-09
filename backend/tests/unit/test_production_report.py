@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -308,3 +311,107 @@ def test_snapshot_retention_keeps_newest_files(tmp_path: Path):
         (tmp_path / name).write_text("{}", encoding="utf-8")
     production_report.prune_snapshots(tmp_path, keep=2)
     assert sorted(path.name for path in tmp_path.iterdir()) == ["002.json", "003.json"]
+
+
+# /proc/locks as the production kernel prints it; 08:01:2540 is the deploy lock.
+PROC_LOCKS = (
+    "1: POSIX  ADVISORY  WRITE 999 08:01:77 0 EOF\n"
+    "2: FLOCK  ADVISORY  WRITE 731027 08:01:2540 0 EOF\n"
+    "2: -> FLOCK  ADVISORY  WRITE 4242 08:01:2540 0 EOF\n"
+)
+
+
+def fake_proc_locks(tmp_path: Path, monkeypatch, table: str) -> Path:
+    proc = tmp_path / "locks"
+    proc.write_text(table, encoding="utf-8")
+    monkeypatch.setattr(production_report, "lock_file_id", lambda path: "08:01:2540")
+    return proc
+
+
+def test_deployment_lock_owner_reads_proc_locks(tmp_path: Path, monkeypatch):
+    proc = fake_proc_locks(tmp_path, monkeypatch, PROC_LOCKS)
+    assert production_report.deployment_lock_owner(tmp_path / "deploy.lock", proc) == 731027
+
+
+def test_a_waiter_or_another_file_is_not_a_deployment(tmp_path: Path, monkeypatch):
+    proc = fake_proc_locks(
+        tmp_path,
+        monkeypatch,
+        "1: FLOCK  ADVISORY  WRITE 555 08:01:25400 0 EOF\n"
+        "2: -> FLOCK  ADVISORY  WRITE 4242 08:01:2540 0 EOF\n",
+    )
+    assert production_report.deployment_lock_owner(tmp_path / "deploy.lock", proc) is None
+
+
+def test_no_lock_file_means_no_deployment(tmp_path: Path):
+    assert production_report.deployment_lock_owner(tmp_path / "missing.lock") is None
+
+
+@pytest.mark.skipif(not production_report.PROC_LOCKS.exists(), reason="needs Linux /proc/locks")
+def test_deployment_lock_owner_sees_a_real_flock(tmp_path: Path):
+    import fcntl
+
+    lock = tmp_path / "deploy.lock"
+    lock.touch()
+    assert production_report.deployment_lock_owner(lock) is None
+    with lock.open("r") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert production_report.deployment_lock_owner(lock) == os.getpid()
+    assert production_report.deployment_lock_owner(lock) is None
+
+
+def test_deployment_minutes_follow_one_deployment_and_clear(tmp_path: Path, monkeypatch):
+    owners = iter([111, 111, 222, None])
+    monkeypatch.setattr(production_report, "deployment_lock_owner", lambda *_: next(owners))
+    start = 1_000_000.0
+
+    assert production_report.deployment_minutes(tmp_path, now=start) == 0
+    assert production_report.deployment_minutes(tmp_path, now=start + 600) == 10
+    assert production_report.deployment_minutes(tmp_path, now=start + 720) == 0  # the next deployment
+    assert production_report.deployment_minutes(tmp_path, now=start + 900) is None
+    assert not (tmp_path / "deployment.json").exists()
+
+
+def test_check_is_skipped_while_a_deployment_holds_the_lock(tmp_path: Path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("OPS_DEPLOY_PAUSE_MAX_MINUTES", raising=False)
+    monkeypatch.setattr(production_report, "deployment_lock_owner", lambda *_: 731027)
+    monkeypatch.setattr(production_report, "collect_check", lambda repo: pytest.fail("must not check"))
+    monkeypatch.setattr(production_report, "reclaim_storage", lambda **_: pytest.fail("must not prune"))
+    state = tmp_path / "ops"
+
+    assert production_report.main(["check", "--repo", str(tmp_path), "--state-dir", str(state)]) == 0
+
+    assert "check skipped" in json.loads(capsys.readouterr().out)["paused"]
+    assert not (state / "alert-state.json").exists()
+    assert not (state / "latest-check.json").exists()
+
+
+def test_a_deployment_past_the_pause_limit_is_checked_and_reported(tmp_path: Path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("OPS_DEPLOY_PAUSE_MAX_MINUTES", raising=False)
+    state = tmp_path / "ops"
+    state.mkdir()
+    (state / "deployment.json").write_text(
+        json.dumps({"owner": 731027, "since": time.time() - 61 * 60}), encoding="utf-8"
+    )
+    monkeypatch.setattr(production_report, "deployment_lock_owner", lambda *_: 731027)
+    check = capacity_check(50.0)
+    check["timestamp"] = "2026-10-08T19:00:00+00:00"
+    monkeypatch.setattr(production_report, "collect_check", lambda repo: check)
+    sent: list[str] = []
+    monkeypatch.setattr(production_report, "send_webhook", lambda message: sent.append(message) or True)
+
+    assert production_report.main(["check", "--repo", str(tmp_path), "--state-dir", str(state)]) == 0
+
+    issues = json.loads(capsys.readouterr().out)["issues"]
+    assert [issue["code"] for issue in issues] == ["deployment_overrun"]
+    assert "over 60 minutes" in sent[0]
+
+
+def test_overrun_alert_does_not_change_while_it_lasts():
+    first, later = healthy_check(), healthy_check()
+    first["deployment_minutes"], later["deployment_minutes"] = 61.0, 75.0
+    assert production_report.assess(first, require_backup=False) == production_report.assess(
+        later, require_backup=False
+    )

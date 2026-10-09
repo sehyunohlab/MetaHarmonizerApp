@@ -57,6 +57,24 @@ whole-filesystem growth. Whole-filesystem growth is deliberately conservative;
 the component table separates KB releases, uploads, PostgreSQL, Redis, images,
 volumes, and reclaimable build cache.
 
+### Checks pause during deployments
+
+`deploy_revision.sh` and `deploy_kb_bundle.sh` hold an exclusive lock on
+`/tmp/metaharmonizer-deploy.lock` for their whole run, and the 5-minute check
+skips while it is held. It raises no alerts and runs no storage cleanup, and its
+journal line reads `"paused": "A deployment holds the deploy lock …"`. Planned
+restarts therefore don't page anyone, and cleanup can't remove KB volumes that a
+rollout has staged but not attached yet. The check reads the lock from
+`/proc/locks` without taking it, so it never blocks a deployment, and a
+deployment that dies releases the lock, so checks resume on their own. If a
+deployment holds the lock for longer than the limit below, checks resume and
+report `deployment_overrun`.
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `OPS_DEPLOY_LOCK_FILE` | `/tmp/metaharmonizer-deploy.lock` | Lock both deploy tools hold |
+| `OPS_DEPLOY_PAUSE_MAX_MINUTES` | `60` | Longest a deployment pauses checks |
+
 Application code is released separately from the KB timer. A merge to `main`
 does not deploy production automatically. The exact developer-to-operator
 workflow, backup-first deployment command, schema-migration exception, and

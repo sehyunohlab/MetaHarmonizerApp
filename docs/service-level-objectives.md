@@ -34,7 +34,9 @@ quantities and must not be substituted for one another.
 - Dashboard latency is measured by `load/k6/multiuser.js` against an isolated
   stack with one account and one review-ready study per VU.
 - Availability is sampled every five minutes by
-  `metaharmonizer-ops-check.timer`. An external monitor is still required to
+  `metaharmonizer-ops-check.timer`. Samples are skipped while a deployment
+  holds the deploy lock (planned maintenance, at most 60 minutes; see
+  `docs/production-operations.md`). An external monitor is still required to
   detect host/network failure when the VM itself cannot run the check.
 - HTTP 5xx deltas require the host-only metrics bearer token described in
   `docs/production-operations.md`.
