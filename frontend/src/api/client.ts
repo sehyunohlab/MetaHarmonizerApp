@@ -296,7 +296,7 @@ export async function getExportPreview(
         limit: String(query.limit),
         changed_only: String(query.changedOnly),
     });
-    if (query.column) qs.set('column', query.column);
+    for (const name of query.columns ?? []) qs.append('column', name);
     return request<ExportPreview>(`${BASE}/export/${encodeURIComponent(studyId)}/preview?${qs}`);
 }
 

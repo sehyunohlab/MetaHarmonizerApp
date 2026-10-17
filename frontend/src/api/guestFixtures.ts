@@ -226,7 +226,7 @@ function demoExportPreview(params: URLSearchParams): ExportPreview {
     const offset = Math.max(0, Number(params.get('offset') ?? 0) || 0);
     const limit = Math.max(1, Number(params.get('limit') ?? 50) || 50);
     const changedOnly = params.get('changed_only') === 'true';
-    const focus = params.get('column');
+    const scope = params.getAll('column');
     const outputs = demoExportColumns.filter((c) => c.target !== null);
     const rowCount = demoStudy.row_count ?? 0;
 
@@ -265,10 +265,9 @@ function demoExportPreview(params: URLSearchParams): ExportPreview {
         };
     });
 
-    const focusIndex = focus ? outputs.findIndex((c) => c.target === focus) : -1;
-    const lines = cells
-        .map((_, r) => r)
-        .filter((r) => !changedOnly || (focusIndex !== -1 ? changed(r, focusIndex) : outputs.some((_, j) => changed(r, j))));
+    const scoped = outputs.flatMap((c, j) => (scope.length === 0 || scope.includes(c.target as string) ? [j] : []));
+    const changedLines = cells.map((_, r) => r).filter((r) => scoped.some((j) => changed(r, j)));
+    const lines = changedOnly ? changedLines : cells.map((_, r) => r);
     const changedCells = columns.reduce((sum, c) => sum + c.changed_cells, 0);
     const count = (action: ExportColumnChange['action']) => demoExportColumns.filter((c) => c.action === action).length;
 
@@ -290,6 +289,7 @@ function demoExportPreview(params: URLSearchParams): ExportPreview {
         columns,
         rows: {
             total: lines.length,
+            changed_total: changedLines.length,
             offset,
             limit,
             columns: outputs.map((c) => c.target as string),

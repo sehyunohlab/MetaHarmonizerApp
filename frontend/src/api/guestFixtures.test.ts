@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 const preview = (query: Partial<ExportPreviewQuery> = {}): Promise<ExportPreview> =>
-  getExportPreview(DEMO_STUDY_ID, { offset: 0, limit: 50, changedOnly: false, column: null, ...query });
+  getExportPreview(DEMO_STUDY_ID, { offset: 0, limit: 50, changedOnly: false, columns: null, ...query });
 
 describe('guest export preview', () => {
   it('is served from the fixture without touching the network', async () => {
@@ -47,6 +47,7 @@ describe('guest export preview', () => {
   it('lists only changed rows when changed_only is on, with valid change cells', async () => {
     const { summary, rows } = await preview({ changedOnly: true, limit: 200 });
     expect(rows.total).toBe(summary.changed_rows);
+    expect(rows.changed_total).toBe(summary.changed_rows);
     expect(rows.items).toHaveLength(Math.min(200, rows.total));
     for (const row of rows.items) {
       expect(row.values).toHaveLength(rows.columns.length);
@@ -64,13 +65,34 @@ describe('guest export preview', () => {
     expect(rows.items.map((row) => row.line)).toEqual([1, 2, 3, 4, 5]);
   });
 
-  it('focuses a column on its changed cells', async () => {
-    const { columns, rows } = await preview({ column: 'gender', changedOnly: true, limit: 200 });
-    const gender = rows.columns.indexOf('gender');
-    expect(rows.total).toBe(columns.find((c) => c.target === 'gender')?.changed_cells);
-    for (const row of rows.items) {
-      expect(row.changes.some((change) => change.column === gender)).toBe(true);
+  it('keeps rows changed in any of the chosen columns', async () => {
+    const all = await preview({ limit: 200 });
+    const changedIn = (name: string) => all.columns.find((c) => c.target === name)?.changed_cells ?? 0;
+    const valued = all.rows.columns.filter((name) => changedIn(name) > 0);
+    expect(valued.length).toBeGreaterThan(0);
+
+    const one = await preview({ columns: [valued[0]], changedOnly: true, limit: 200 });
+    const index = one.rows.columns.indexOf(valued[0]);
+    expect(one.rows.total).toBe(changedIn(valued[0]));
+    expect(one.rows.changed_total).toBe(one.rows.total);
+    for (const row of one.rows.items) {
+      expect(row.changes.some((change) => change.column === index)).toBe(true);
     }
+
+    // An unchanged column adds no rows; every column with changes gives every changed row.
+    const unchanged = all.rows.columns.filter((name) => changedIn(name) === 0);
+    const withUnchanged = await preview({ columns: [valued[0], ...unchanged], changedOnly: true, limit: 200 });
+    expect(withUnchanged.rows.total).toBe(one.rows.total);
+    const everyChanged = await preview({ columns: valued, changedOnly: true, limit: 200 });
+    expect(everyChanged.rows.total).toBe(all.summary.changed_rows);
+
+    // Without changed_only every row is kept but the count still follows the columns.
+    const counted = await preview({ columns: [valued[0]], limit: 5 });
+    expect(counted.rows.total).toBe(all.summary.rows);
+    expect(counted.rows.changed_total).toBe(one.rows.total);
+    const none = await preview({ columns: unchanged, changedOnly: true });
+    expect(none.rows.total).toBe(0);
+    expect(none.rows.changed_total).toBe(0);
   });
 
   it('pages through rows', async () => {

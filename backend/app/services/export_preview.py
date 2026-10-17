@@ -7,6 +7,7 @@ Each changed cell is attributed to an ontology rewrite or a spreadsheet escape.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
@@ -21,7 +22,7 @@ MAX_VALUE_CHANGES = 25
 
 
 class UnknownColumnError(ValueError):
-    """The requested column is not part of the harmonized export."""
+    """A requested column is not part of the harmonized export."""
 
 
 def build_preview(
@@ -32,16 +33,21 @@ def build_preview(
     offset: int = 0,
     limit: int = 50,
     changed_only: bool = False,
-    column: str | None = None,
+    columns: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Compare ``table`` with the upload's original text.
 
-    ``changed_only`` keeps rows with at least one changed cell (in ``column``
-    when given); ``offset``/``limit`` select a page of those rows.
+    ``columns`` scopes the change filter to those export columns (every column
+    when none are given): ``changed_only`` keeps rows with a changed cell in
+    any of them, and ``rows.changed_total`` counts such rows either way.
+    ``offset``/``limit`` select a page of the kept rows.
     """
     targets = list(table.frame.columns)
-    if column is not None and column not in targets:
-        raise UnknownColumnError(f"'{column}' is not a column of the harmonized export.")
+    unknown = [name for name in columns or () if name not in targets]
+    if unknown:
+        names = ", ".join(repr(name) for name in unknown)
+        verb = "is not a column" if len(unknown) == 1 else "are not columns"
+        raise UnknownColumnError(f"{names} {verb} of the harmonized export.")
 
     source_of = {p.target: p.source for p in table.plan if p.target is not None}
     position = {target: j for j, target in enumerate(targets)}
@@ -59,10 +65,10 @@ def build_preview(
 
     changed_per_column = changed.sum(axis=0)
     value_changes, more_value_changes = _value_changes(before, after, reasons, changed)
-    columns = []
+    column_report = []
     for plan in table.plan:
         j = position.get(plan.target) if plan.target is not None else None
-        columns.append(
+        column_report.append(
             {
                 "source": plan.source,
                 "target": plan.target,
@@ -94,11 +100,10 @@ def build_preview(
         "compared_cells": n_rows * len(targets),
     }
 
-    if changed_only:
-        selected = changed[:, position[column]] if column is not None else changed_rows
-        positions = np.flatnonzero(selected)
-    else:
-        positions = np.arange(n_rows)
+    in_scope = (
+        changed[:, [position[name] for name in columns]].any(axis=1) if columns else changed_rows
+    )
+    positions = np.flatnonzero(in_scope) if changed_only else np.arange(n_rows)
 
     items = [
         {
@@ -115,9 +120,10 @@ def build_preview(
     return {
         "study_id": study_id,
         "summary": summary,
-        "columns": columns,
+        "columns": column_report,
         "rows": {
             "total": len(positions),
+            "changed_total": int(in_scope.sum()),
             "offset": offset,
             "limit": limit,
             "columns": targets,

@@ -9,8 +9,8 @@ import { PAGE_SIZE } from './presentation';
 import { PreviewSummary } from './PreviewSummary';
 import { useExportDownload } from './useExportDownload';
 
-// Everything by default (changes are highlighted); focusing a column narrows to its changes.
-const INITIAL_QUERY: ExportPreviewQuery = { offset: 0, limit: PAGE_SIZE, changedOnly: false, column: null };
+// Everything by default (changes are highlighted); the Columns list narrows what is shown.
+const INITIAL_QUERY: ExportPreviewQuery = { offset: 0, limit: PAGE_SIZE, changedOnly: false, columns: null };
 
 /** Harmonized CSV vs. original upload: a summary, then every harmonized value. */
 export function ChangePreview({ studyId }: { studyId: string }) {
@@ -60,7 +60,6 @@ export function ChangePreview({ studyId }: { studyId: string }) {
       <ChangedValuesGrid
         rows={rows}
         columns={columns}
-        changedRows={summary.changed_rows}
         query={query}
         fetching={preview.isFetching}
         onQueryChange={setQuery}

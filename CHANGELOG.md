@@ -96,6 +96,15 @@ versioning once a stable `1.x` release is declared.
 - The export preview no longer has a **Column changes** table, and its grid of
   exported values is now called **Harmonized metadata**. The summary still
   counts the columns left out of the export.
+- The preview's **Values changed in** list offered only columns whose values
+  changed, one at a time, so a study whose only rewritten column was `disease`
+  offered nothing else. It is replaced by a **Columns** checklist of every
+  exported column, marked as renamed, with its number of changed values, or
+  unchanged. It shows any combination of columns, or **All**, **Changed**
+  (replacing **Changed columns only**), or **None**, and **Changed rows only**
+  counts and keeps rows changed in the shown columns. The preview API's
+  `column` parameter can be repeated, and `rows.changed_total` counts the rows
+  changed in those columns.
 
 ## [0.1.0] - 2026-08-19
 

@@ -244,7 +244,10 @@ export interface ExportPreviewRow {
 }
 
 export interface ExportPreviewRows {
+    /** Rows matching the filter. */
     total: number;
+    /** Rows with a changed cell in the requested columns (every column when none). */
+    changed_total: number;
     offset: number;
     limit: number;
     columns: string[];
@@ -261,7 +264,8 @@ export interface ExportPreview {
 export interface ExportPreviewQuery {
     offset: number;
     limit: number;
+    /** Keep only rows with a changed value in the shown columns. */
     changedOnly: boolean;
-    /** Export column to focus on (rows where it changed); null for all. */
-    column: string | null;
+    /** Export columns to show, in export order; null shows every column. */
+    columns: string[] | null;
 }

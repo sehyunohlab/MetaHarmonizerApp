@@ -158,6 +158,7 @@ async def test_preview_matches_the_download_and_does_not_mark_export(env):
         rows = body["rows"]
         assert rows["columns"] == ["sample_id", "sex", "age_years", "comment"]
         assert [item["line"] for item in rows["items"]] == [1, 2, 3]  # every row by default
+        assert rows["changed_total"] == 2
         assert rows["items"][1]["changes"] == []
         changed = (
             await c.get(
@@ -224,6 +225,25 @@ async def test_preview_validates_paging_and_column(env):
         ).json()
         assert focused["rows"]["total"] == 1
         assert focused["rows"]["items"][0]["line"] == 1
+
+        # Repeating ``column`` keeps rows changed in any of them.
+        either = (
+            await c.get(
+                url,
+                params=[("column", "sex"), ("column", "comment"), ("changed_only", "true")],
+                headers=headers,
+            )
+        ).json()["rows"]
+        assert [item["line"] for item in either["items"]] == [1, 3]
+        assert either["changed_total"] == 2
+        renamed_only = (
+            await c.get(url, params=[("column", "sample_id"), ("column", "age_years")], headers=headers)
+        ).json()["rows"]
+        assert renamed_only["total"] == 3 and renamed_only["changed_total"] == 0
+        one_unknown = await c.get(
+            url, params=[("column", "comment"), ("column", "gender")], headers=headers
+        )
+        assert one_unknown.status_code == 422
 
         beyond = (await c.get(url, params={"offset": 10}, headers=headers)).json()
         assert beyond["rows"]["total"] == 3 and beyond["rows"]["items"] == []

@@ -157,7 +157,6 @@ test.describe('authenticated journey', () => {
       await expect(page.getByRole('heading', { name: 'Harmonized metadata', exact: true })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Column changes', exact: true })).toHaveCount(0);
       await expect(page.getByRole('checkbox', { name: 'Changed rows only' })).not.toBeChecked();
-      await expect(page.getByRole('checkbox', { name: 'Changed columns only' })).not.toBeChecked();
       // The grid lists every exported column under its export name, and every row.
       const grid = page.getByRole('region', { name: 'Harmonized metadata table' });
       const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -170,6 +169,15 @@ test.describe('authenticated journey', () => {
       for (const value of body.rows.items[0].values as string[]) {
         await expect(grid.getByRole('cell', { name: value, exact: true }).first()).toBeVisible();
       }
+      // The Columns checklist lists every exported column, all shown by default.
+      const picker = page.getByRole('button', { name: /^Columns/ });
+      await expect(picker).toContainText('All');
+      await picker.click();
+      for (const name of body.rows.columns as string[]) {
+        await expect(page.getByRole('checkbox', { name, exact: true })).toBeChecked();
+      }
+      await page.keyboard.press('Escape');
+      await expect(picker).toHaveAttribute('aria-expanded', 'false');
 
       // Switching back to Downloads keeps the study and drops the view param.
       await page.getByRole('tab', { name: /Downloads/ }).click();
