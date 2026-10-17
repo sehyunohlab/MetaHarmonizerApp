@@ -201,12 +201,12 @@ def _find_id_column(df: pd.DataFrame, candidates: list[str]) -> str:
 
 # Column selection (shared by every export)
 
-# Several columns mapped to one field are merged into it, as in the lab's
-# curated cBioPortal metadata (MetaHarmonizer's examples/data/
-# query_with_selected_fields_for_bie.csv): each row's non-empty values, in
-# column order, become their confirmed terms, repeats are listed once, and they
-# are separated by ``<;>``. Single values can contain ``;`` (``CHOLANGIOCARCINOMA;
-# INTRAHEPATIC``), so ``;`` would be ambiguous; the engine splits cells on both.
+# Several columns mapped to one field are merged into it the way the lab's
+# curations merge them (MetaHarmonizer_Test_Data, curation/disease/
+# cBioPortal_curated_Disease.qmd): each row's non-missing values, in column
+# order, "separated by a special 3-character delimiter ("<;>")... implemented so
+# as to preserve curated ontology terms containing semicolons"; the curated
+# value lists each term once. Upstream's extract_valid_value splits on it.
 MULTI_VALUE_DELIMITER = "<;>"
 
 # Identifier fields hold one value per row, so their columns are never merged:
@@ -274,22 +274,24 @@ def _field_sources(
 ) -> dict[str, tuple[str, list[str]]]:
     """The columns that fill each schema field: ``{field key: (field, columns)}``.
 
-    Every column mapped to a field fills it, in upload order, and exports merge
-    their values (see :func:`_join_values`). An identifier field takes only
-    the column :func:`_select_sources` ranks first.
+    The accepted columns mapped to a field fill it, in upload order, and
+    exports merge their values (see :func:`harmonize_table`); in the lab's
+    harmonized data every merged column is one a curator assigned to the field.
+    A field without an accepted column takes its best unreviewed suggestion,
+    and an identifier field only the column :func:`_select_sources` ranks first.
     """
     position = {column: i for i, column in enumerate(columns)}
-    members: dict[str, set[str]] = {}
+    accepted: dict[str, set[str]] = {}
     for m in mappings:
         raw, target = m.get("raw_column"), mapping_target(m)
-        if raw in position and target:
-            members.setdefault(key(target) if key else target, set()).add(raw)
+        if raw in position and target and m.get("status") == "accepted":
+            accepted.setdefault(key(target) if key else target, set()).add(raw)
     fields: dict[str, tuple[str, list[str]]] = {}
     for field_key, (first, target) in _select_sources(mappings, columns, key).items():
-        if _cbio_id(target) in _ID_FIELDS:
+        if _cbio_id(target) in _ID_FIELDS or field_key not in accepted:
             fields[field_key] = (target, [first])
         else:
-            fields[field_key] = (target, sorted(members[field_key], key=position.__getitem__))
+            fields[field_key] = (target, sorted(accepted[field_key], key=position.__getitem__))
     return fields
 
 
@@ -357,21 +359,26 @@ def harmonize_table(
     value_rewrites: dict[str, dict[str, str]],
 ) -> HarmonizedTable:
     """Build the harmonized table: rename raw columns to their accepted/curated
-    mappings, merge columns mapped to the same field, drop unmapped columns,
-    rewrite accepted cell values to their confirmed ontology terms (U5), and
-    escape formula-like strings.
+    mappings, merge the accepted columns of one field, drop unmapped columns,
+    write curated fields the way the lab's harmonized files do, and escape
+    formula-like strings.
 
     ``raw_text`` holds the upload's original cell text and ``raw_df`` the same
-    file read with type inference. Output cells keep the original text unless
-    they are rewritten or escaped, so numbers and missing-value markers are not
-    reformatted. A value's ontology row is found by its inferred or its
-    original spelling (see :func:`_term`).
+    file read with type inference. A field whose values were mapped to an
+    ontology (a key of ``value_rewrites``), other than an identifier, is
+    written as four columns (see :func:`_curated_columns`). Any other field is
+    one column named after it whose cells keep the uploaded text, so numbers
+    and missing-value markers are not reformatted (see :func:`_plain_column`).
     """
-    # Columns mapped to one field are merged into it (see _field_sources); an
-    # identifier field keeps one column.
     fields = _field_sources(mappings, list(raw_df.columns))
     sources_of = {target: sources for target, sources in fields.values()}
     target_of = {raw: target for target, sources in fields.values() for raw in sources}
+    curated = {f for f in sources_of if f in value_rewrites and _cbio_id(f) not in _ID_FIELDS}
+    # The export column names each field takes, and the column that owns each.
+    owner: dict[str, str] = {}
+    for field, sources in sources_of.items():
+        for name in _curated_names(field) if field in curated else (field,):
+            owner.setdefault(name, sources[0])
     proposed = {
         m["raw_column"]: target
         for m in mappings
@@ -383,7 +390,7 @@ def harmonize_table(
         for m in mappings
         if m.get("status") == "rejected"
         and m.get("raw_column") in raw_df.columns
-        and m.get("raw_column") not in sources_of
+        and m.get("raw_column") not in owner
     }
 
     plan: list[ColumnPlan] = []
@@ -396,41 +403,48 @@ def harmonize_table(
         status = status_by_raw.get(raw, "unmapped")
         if status not in ("accepted", "pending", "rejected"):
             status = "unmapped"
+        field: str | None
         if raw in target_of:
-            target = target_of[raw]
+            field = target_of[raw]
+            target = _curated_names(field)[1] if field in curated else field
             action: ColumnAction
-            if len(sources_of[target]) > 1:
+            if len(sources_of[field]) > 1:
                 action = "merged"
             else:
-                action = "matched" if target == raw else "renamed"
+                action = "matched" if field == raw else "renamed"
         elif raw in rejected_raw:
-            target, action = raw, "kept"
+            field, target, action = None, raw, "kept"
         else:
             if raw in proposed:
                 reason: DropReason = "duplicate_target"
                 winner = sources_of[proposed[raw]][0]
             elif status == "rejected":
-                reason, winner = "name_conflict", sources_of.get(raw, [None])[0]
+                reason, winner = "name_conflict", owner.get(raw)
             else:
                 reason, winner = "no_target", None
             plan.append(ColumnPlan(raw, None, "dropped", status, reason, winner))
             continue
         plan.append(ColumnPlan(raw, target, action, status))
         if target in columns:
-            continue  # a merged column is built with its first source
+            continue  # a merged field is built with its first source
 
-        # Rewrites belong to a field mapping: a kept (rejected) column is
-        # exported as uploaded, even if terms for a field of the same name exist.
-        lookup = value_rewrites.get(target) if action != "kept" else None
-        text, hit, uploaded = _column_text(raw_text, raw_df, sources_of.get(target, [raw]), lookup)
-        # Neutralize spreadsheet formula-injection in this human-facing CSV.
-        # (The cBioPortal TSVs are machine-read by the importer, so they are
-        # not escaped.)
-        guarded = text.map(_guard_formula_injection)
-        columns[target] = guarded
-        rewritten[target] = hit
-        escaped[target] = guarded != text
-        original[target] = uploaded
+        if field in curated:
+            built = _curated_columns(raw_text, raw_df, field, sources_of[field], value_rewrites[field])
+        else:
+            # Rewrites belong to a field mapping: a kept (rejected) column is
+            # exported as uploaded, even if terms for a field of the same name exist.
+            lookup = value_rewrites.get(field) if field is not None else None
+            sources = sources_of[field] if field is not None else [raw]
+            built = {target: _plain_column(raw_text, raw_df, sources, lookup)}
+        for name, (text, hit, uploaded) in built.items():
+            # Neutralize spreadsheet formula-injection in this human-facing CSV.
+            # (The cBioPortal TSVs are machine-read by the importer, so they are
+            # not escaped.)
+            guarded = text.map(_guard_formula_injection)
+            columns[name] = guarded
+            rewritten[name] = hit
+            escaped[name] = guarded != text
+            original[name] = uploaded
 
     index = raw_text.index
     return HarmonizedTable(
@@ -442,21 +456,117 @@ def harmonize_table(
     )
 
 
-def _column_text(
+# A missing harmonized value, as the lab's harmonized files write it.
+MISSING = "NA"
+
+
+def _curated_names(field: str) -> tuple[str, str, str, str]:
+    """A curated field's columns, as in the lab's harmonized files."""
+    return (
+        f"original_{field}_value",
+        f"curated_{field}",
+        f"curated_{field}_ontology_term_id",
+        f"curated_{field}_source",
+    )
+
+
+Column = tuple[pd.Series, pd.Series, pd.Series]  # text, holds a term, uploaded text
+
+
+def _filled(raw_text: pd.DataFrame, raw_df: pd.DataFrame, source: str) -> list[bool]:
+    """Which rows of ``source`` hold a value (not blank, not a missing marker)."""
+    return [typed and _has_value(text) for typed, text in zip(raw_df[source].notna(), raw_text[source])]
+
+
+def _curated_columns(
+    raw_text: pd.DataFrame,
+    raw_df: pd.DataFrame,
+    field: str,
+    sources: list[str],
+    lookup: Mapping[str, str],
+) -> dict[str, Column]:
+    """A curated field's four columns, built as in the lab's harmonized files
+    (MetaHarmonizer_Test_Data, data/per_study/harmonized; reproduced there on
+    17,664 merged cells). Per row, from the field's columns that hold a value,
+    in upload order:
+
+    - ``original_<f>_value``: their values joined by "<;>", repeats kept, in capitals;
+    - ``curated_<f>``: each value's confirmed term, each term once, values
+      without a confirmed term left out;
+    - ``curated_<f>_ontology_term_id``: those terms' ids, in the same order;
+    - ``curated_<f>_source``: the columns used, joined by ";".
+
+    A row with no value, or no confirmed term, is written ``NA``. Only the
+    curated column compares with the upload in the preview; the others
+    describe it.
+    """
+    names = _curated_names(field)
+    filled = [_filled(raw_text, raw_df, s) for s in sources]
+    keys = [_term_keys(lookup, raw_df[s], raw_text[s]).tolist() for s in sources]
+    texts = [raw_text[s].tolist() for s in sources]
+    term_ids = getattr(lookup, "ids", {})
+    originals, uploaded, curated, ids, used, hits = [], [], [], [], [], []
+    for i in range(len(raw_text.index)):
+        present = [k for k in range(len(sources)) if filled[k][i]]
+        values = [texts[k][i] for k in present]
+        terms: dict[str, str] = {}
+        for k in present:
+            key = keys[k][i]
+            if key is not None:
+                for term, term_id in _split_terms(lookup[key], term_ids.get(key)):
+                    if terms.get(term, MISSING) == MISSING:
+                        terms[term] = term_id
+        joined = MULTI_VALUE_DELIMITER.join(values)
+        originals.append(joined.upper() if values else MISSING)
+        uploaded.append(joined if values else MISSING)
+        curated.append(MULTI_VALUE_DELIMITER.join(terms) if terms else MISSING)
+        ids.append(MULTI_VALUE_DELIMITER.join(terms.values()) if terms else MISSING)
+        used.append(";".join(sources[k] for k in present) if present else MISSING)
+        hits.append(bool(terms))
+    index = raw_text.index
+    no_terms = pd.Series(False, index=index)
+
+    def series(cells: list[str]) -> pd.Series:
+        return pd.Series(cells, index=index, dtype=object)
+
+    return {
+        names[0]: (series(originals), no_terms, series(originals)),
+        names[1]: (series(curated), pd.Series(hits, index=index, dtype=bool), series(uploaded)),
+        names[2]: (series(ids), no_terms, series(ids)),
+        names[3]: (series(used), no_terms, series(used)),
+    }
+
+
+def _split_terms(term: str, term_id: str | None) -> list[tuple[str, str]]:
+    """A confirmed term and its id, split into single terms.
+
+    In the lab's curation maps one value can have several terms ("ABDOMEN,
+    PELVIS" is Abdomen and Pelvis), which a curator records joined by
+    :data:`MULTI_VALUE_DELIMITER`; each id pairs with the term at its position.
+    """
+    names = [t.strip() for t in str(term).split(MULTI_VALUE_DELIMITER)]
+    found = [t.strip() for t in str(term_id or "").split(MULTI_VALUE_DELIMITER)]
+    return [
+        (name, (found[n] if n < len(found) else "") or MISSING)
+        for n, name in enumerate(names)
+        if name
+    ]
+
+
+def _plain_column(
     raw_text: pd.DataFrame,
     raw_df: pd.DataFrame,
     sources: list[str],
     lookup: Mapping[str, str] | None,
-) -> tuple[pd.Series, pd.Series, pd.Series]:
-    """An export column's text, where it holds a confirmed term, and the
-    uploaded text it comes from.
+) -> Column:
+    """A field's one column: its text, where it holds a confirmed term, and
+    the uploaded text it comes from.
 
-    Value-level rewrite (U5): accepted raw values become their confirmed
-    ontology term; unmatched values pass through. Several sources are merged
-    per row: the distinct values of the columns with one, in upload order,
-    each rewritten, joined by :data:`MULTI_VALUE_DELIMITER`. A row with no
-    value in any of them keeps the first column's text (blank, or a marker
-    such as ``NA``).
+    One source keeps its uploaded cells. Several are merged per row: the
+    distinct values of the columns with one, in upload order, joined by
+    :data:`MULTI_VALUE_DELIMITER`. A row with no value in any of them keeps the
+    first column's text (blank, or a marker such as ``NA``). ``lookup`` rewrites
+    accepted raw values to their confirmed term (U5).
     """
     texts, outputs, hits = [], [], []
     for source in sources:
@@ -473,10 +583,7 @@ def _column_text(
     if len(sources) == 1:
         return outputs[0], hits[0], texts[0]
 
-    filled = [
-        [typed and _has_value(text) for typed, text in zip(raw_df[s].notna(), raw_text[s])]
-        for s in sources
-    ]
+    filled = [_filled(raw_text, raw_df, s) for s in sources]
     text_cells = [t.tolist() for t in texts]
     output_cells = [o.tolist() for o in outputs]
     hit_cells = [h.tolist() for h in hits]
@@ -525,15 +632,17 @@ async def export_harmonized_csv(
 
 class FieldRewrites(dict[str, str]):
     """One field's ``raw_value -> confirmed term`` lookup. ``reviewed`` holds
-    the raw values whose term comes from a curator's decision."""
+    the raw values whose term comes from a curator's decision, and ``ids``
+    each term's ontology id."""
 
     def __init__(self) -> None:
         super().__init__()
         self.reviewed: set[str] = set()
+        self.ids: dict[str, str] = {}
 
 
-def _term(lookup: Mapping[str, str], typed: str, text: str) -> str | None:
-    """A cell's confirmed ontology term, if it has one.
+def _term_key(lookup: Mapping[str, str], typed: str, text: str) -> str | None:
+    """The spelling under which a cell's confirmed term is recorded, if any.
 
     ``typed`` is the cell as the type-inferred frame spells it (``1.0``), which
     is how the pipeline keys an ontology row; ``text`` is the uploaded text
@@ -544,12 +653,18 @@ def _term(lookup: Mapping[str, str], typed: str, text: str) -> str | None:
     reviewed = getattr(lookup, "reviewed", ())
     for key in sorted(keys, key=lambda k: k not in reviewed):
         if key in lookup:
-            return lookup[key]
+            return key
     return None
 
 
-def _terms(lookup: Mapping[str, str], values: pd.Series, text: pd.Series) -> pd.Series:
-    """:func:`_term` for a column: each cell's term, ``None`` where it has none.
+def _term(lookup: Mapping[str, str], typed: str, text: str) -> str | None:
+    """A cell's confirmed ontology term, if it has one (see :func:`_term_key`)."""
+    key = _term_key(lookup, typed, text)
+    return None if key is None else lookup[key]
+
+
+def _term_keys(lookup: Mapping[str, str], values: pd.Series, text: pd.Series) -> pd.Series:
+    """:func:`_term_key` for a column: each cell's key, ``None`` where it has none.
 
     ``values`` is the type-inferred column and ``text`` its uploaded text. A
     missing cell never has a term. Each distinct pair of spellings is looked
@@ -560,28 +675,36 @@ def _terms(lookup: Mapping[str, str], values: pd.Series, text: pd.Series) -> pd.
     n = len(text_uniques)  # pair code = typed code * n + text code
     pairs, codes = np.unique(typed_codes.astype(np.int64) * n + text_codes, return_inverse=True)
     found = np.array(
-        [_term(lookup, typed_uniques[p // n], text_uniques[p % n]) for p in pairs], dtype=object
+        [_term_key(lookup, typed_uniques[p // n], text_uniques[p % n]) for p in pairs], dtype=object
     )[codes.ravel()]
     found[values.isna().to_numpy()] = None
     return pd.Series(found, index=text.index, dtype=object)
 
 
+def _terms(lookup: Mapping[str, str], values: pd.Series, text: pd.Series) -> pd.Series:
+    """Each cell's confirmed term, ``None`` where it has none (see :func:`_term_keys`)."""
+    return _term_keys(lookup, values, text).map(lambda key: None if key is None else lookup[key])
+
+
 async def _build_value_rewrites(
     db: AsyncSession, study_id: str
 ) -> dict[str, FieldRewrites]:
-    """Map each harmonized field to its accepted ``raw_value -> term`` rewrites."""
+    """Each field whose values were mapped to an ontology, with its accepted
+    ``raw_value -> term`` rewrites and their term ids. A field with ontology
+    rows but no accepted term is present with an empty lookup."""
     rewrites: dict[str, FieldRewrites] = {}
     for o in await ontology_repo.get_ontology_mappings(db, study_id):
+        lookup = rewrites.setdefault(o["field_name"], FieldRewrites())
         if o["status"] != "accepted":
             continue
         term = o.get("curator_term") or o.get("ontology_term")
         if not term:
             continue
-        lookup = rewrites.setdefault(o["field_name"], FieldRewrites())
         raw, reviewed = str(o["raw_value"]), bool(o.get("reviewed_at"))
         if raw in lookup.reviewed and not reviewed:
             continue  # a curator's term beats an engine row for the same value
         lookup[raw] = str(term)
+        lookup.ids[raw] = str((o.get("curator_id") if o.get("curator_term") else o.get("ontology_id")) or "")
         if reviewed:
             lookup.reviewed.add(raw)
     return rewrites

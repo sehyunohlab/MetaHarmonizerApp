@@ -76,11 +76,11 @@ async def test_harmonized_export_merges_columns_mapped_to_one_field(monkeypatch)
     })
     mappings = [
         {"raw_column": "dx", "matched_field": "disease", "curator_field": None,
-         "confidence_score": 0.72, "status": "pending"},
+         "confidence_score": 0.72, "status": "accepted"},
         {"raw_column": "diagnosis", "matched_field": "disease", "curator_field": "disease",
          "confidence_score": 0.95, "status": "accepted"},
         {"raw_column": "primary_disease", "matched_field": "disease", "curator_field": None,
-         "confidence_score": 0.80, "status": "pending"},
+         "confidence_score": 0.80, "status": "accepted"},
         {"raw_column": "age", "matched_field": "age_at_procurement", "curator_field": None,
          "confidence_score": 0.60, "status": "pending"},
     ]
@@ -156,12 +156,19 @@ async def test_harmonized_export_uses_curator_override_and_preserves_rejected_ra
 
     out = await exporter.export_harmonized_csv(None, "study", raw_df)
     rows = list(csv.DictReader(io.StringIO(out)))
-    assert list(rows[0]) == ["approved_target", "rejected_column"]
-    assert rows[0]["approved_target"] == "Curator Term"
-    assert rows[1]["approved_target"] == "other"
+    # approved_target has ontology rows, so it is written as the lab's four columns.
+    assert list(rows[0]) == [
+        "original_approved_target_value",
+        "curated_approved_target",
+        "curated_approved_target_ontology_term_id",
+        "curated_approved_target_source",
+        "rejected_column",
+    ]
+    assert rows[0]["curated_approved_target"] == "Curator Term"
+    # 'other' has only a rejected term: it stays in the original value only.
+    assert (rows[1]["curated_approved_target"], rows[1]["original_approved_target_value"]) == ("NA", "OTHER")
     assert rows[0]["rejected_column"] == "keep me"
-    assert "engine_target" not in rows[0]
-    assert "rejected_engine_target" not in rows[0]
+    assert not any("engine_target" in name for name in rows[0])
 
 
 def test_cbioportal_specs_use_curator_target_and_exclude_rejected():

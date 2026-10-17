@@ -12,7 +12,9 @@ function Count({ value }: { value: number }) {
 }
 
 /** A checklist of the exported columns: show any combination of them, every
- *  column, only the changed ones, or none. ``selected`` is null for all. */
+ *  column, only the changed ones, or none. ``selected`` is null for all.
+ *  ``described`` replaces a column's change summary (a curated field's
+ *  companion columns say what they hold). */
 export function ColumnPicker({
   columns,
   selected,
@@ -20,6 +22,7 @@ export function ColumnPicker({
   renamedFrom,
   mergedFrom,
   changedCells,
+  described = {},
   onChange,
 }: {
   columns: string[];
@@ -28,6 +31,7 @@ export function ColumnPicker({
   renamedFrom: Record<string, string>;
   mergedFrom: Record<string, string[]>;
   changedCells: Record<string, number>;
+  described?: Record<string, string>;
   onChange: (next: string[] | null) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -176,7 +180,8 @@ export function ColumnPicker({
                           title={mergedFrom[name] ? `Merged from ${mergedFrom[name].join(', ')}` : undefined}
                           className="block truncate text-[11px] text-slate-500 dark:text-slate-400"
                         >
-                          {describeColumnChange(renamedFrom[name], changedCells[name] ?? 0, mergedFrom[name])}
+                          {described[name] ??
+                            describeColumnChange(renamedFrom[name], changedCells[name] ?? 0, mergedFrom[name])}
                         </span>
                       </span>
                     </li>

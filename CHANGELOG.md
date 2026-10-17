@@ -122,6 +122,22 @@ versioning once a stable `1.x` release is declared.
   how many more (all of them on hover), and the list stays inside its
   dropdown. Before, a field merged from 18 columns made the list 1,504 px wide
   in a 320 px dropdown and the column header wider than the whole table.
+- The Harmonized CSV now writes a field mapped to ontology terms the way the
+  lab's harmonized files do (MetaHarmonizer_Test_Data, 17 cBioPortal studies):
+  `original_<field>_value` (the row's uploaded values joined by `<;>`, in
+  capitals, repeats kept), `curated_<field>` (their accepted terms, each once;
+  a value without an accepted term is left out), `curated_<field>_ontology_term_id`
+  (the terms' ids, in the same order) and `curated_<field>_source` (the columns
+  used, joined by `;`), with `NA` for an empty cell. A term recorded as several
+  terms joined by `<;>` is split, so each is listed once with its id. Run on
+  those 17 studies with the lab's own column assignments and curation maps,
+  our export reproduces 97.8% of the lab's `curated_<field>` and id cells
+  exactly; every other cell holds the same terms in the order of the lab's
+  per-study merge plan, apart from one malformed cell in the lab's file.
+- Only accepted columns are merged into a field, as in the lab's harmonized
+  files, where every merged column is one a curator assigned. An unreviewed
+  suggestion is no longer merged into a field that has accepted columns; a
+  field with none still uses its best suggestion.
 
 ## [0.1.0] - 2026-08-19
 

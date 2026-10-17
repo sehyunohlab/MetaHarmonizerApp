@@ -57,8 +57,10 @@ def test_rewrites_match_inferred_values_but_keep_unmatched_text():
 
     table = harmonize_table(text, typed, [_m("code", "sex")], rewrites)
 
-    assert list(table.frame["sex"]) == ["Male", "Female", "", "3"]
-    assert list(table.rewritten["sex"]) == [True, True, False, False]
+    # A value without a confirmed term stays in original_sex_value only.
+    assert list(table.frame["curated_sex"]) == ["Male", "Female", "NA", "NA"]
+    assert list(table.frame["original_sex_value"]) == ["1", "2", "NA", "3"]
+    assert list(table.rewritten["curated_sex"]) == [True, True, False, False]
 
 
 def test_rewrites_match_values_mapped_after_a_schema_edit():
@@ -77,9 +79,9 @@ def test_rewrites_match_values_mapped_after_a_schema_edit():
         {"sex": sex, "smoking": {"TRUE": "Smoker"}},
     )
 
-    assert list(table.frame["sex"]) == ["Male", "Female", ""]
-    assert list(table.frame["smoking"]) == ["Smoker", "FALSE", ""]
-    assert list(table.rewritten["sex"]) == [True, True, False]
+    assert list(table.frame["curated_sex"]) == ["Male", "Female", "NA"]
+    assert list(table.frame["curated_smoking"]) == ["Smoker", "NA", "NA"]
+    assert list(table.rewritten["curated_sex"]) == [True, True, False]
 
 
 def test_missing_cells_are_never_rewritten():
@@ -89,8 +91,58 @@ def test_missing_cells_are_never_rewritten():
 
     table = harmonize_table(text, typed, [_m("site", "body_site")], rewrites)
 
-    assert list(table.frame["body_site"]) == ["NA", "Lung", "", "NA"]
-    assert list(table.rewritten["body_site"]) == [False, True, False, False]
+    assert list(table.frame["curated_body_site"]) == ["NA", "Lung", "NA", "NA"]
+    assert list(table.frame["curated_body_site_source"]) == ["NA", "site", "NA", "NA"]
+    assert list(table.rewritten["curated_body_site"]) == [False, True, False, False]
+
+
+def test_a_curated_field_is_written_as_the_labs_four_columns():
+    from app.services.exporter import FieldRewrites
+
+    text, typed = _frames("id,site,detail\n1,Lung,Lung\n2,lung,Upper lobe\n3,Unknown,\n4,,\n")
+    terms = FieldRewrites()
+    terms.update({"Lung": "Lung", "lung": "Lung", "Upper lobe": "Upper Lobe of the Lung"})
+    terms.ids.update({"Lung": "NCIT:C12468", "lung": "NCIT:C12468", "Upper lobe": "NCIT:C33887"})
+
+    table = harmonize_table(
+        text, typed, [_m("id", "sample_id"), _m("site", "body_site"), _m("detail", "body_site")],
+        {"body_site": terms},
+    )
+
+    assert list(table.frame.columns) == [
+        "sample_id",
+        "original_body_site_value",
+        "curated_body_site",
+        "curated_body_site_ontology_term_id",
+        "curated_body_site_source",
+    ]
+    rows = table.frame.drop(columns="sample_id").values.tolist()
+    assert rows == [
+        # Repeats stay in the original value; a term is listed once.
+        ["LUNG<;>LUNG", "Lung", "NCIT:C12468", "site;detail"],
+        ["LUNG<;>UPPER LOBE", "Lung<;>Upper Lobe of the Lung", "NCIT:C12468<;>NCIT:C33887", "site;detail"],
+        # A value without a confirmed term is left out of the curated value.
+        ["UNKNOWN", "NA", "NA", "site"],
+        ["NA", "NA", "NA", "NA"],
+    ]
+    # Only the curated column compares with the upload; it is a term change.
+    assert list(table.original["curated_body_site"]) == ["Lung<;>Lung", "lung<;>Upper lobe", "Unknown", "NA"]
+    assert list(table.rewritten["curated_body_site"]) == [True, True, False, False]
+    assert table.original["original_body_site_value"].equals(table.frame["original_body_site_value"])
+
+
+def test_identifiers_and_kept_columns_are_not_curated():
+    text, typed = _frames("pid,curated_sex,sex\nP1,x,F\n")
+    mappings = [_m("pid", "patient_id"), _m("curated_sex", "other", status="rejected"), _m("sex", "sex")]
+
+    table = harmonize_table(text, typed, mappings, {"patient_id": {"P1": "Patient 1"}, "sex": {"F": "Female"}})
+
+    # An identifier keeps one plain column; a rejected column whose name a
+    # curated field takes is left out.
+    assert list(table.frame.columns)[:2] == ["patient_id", "original_sex_value"]
+    assert "curated_sex" in table.frame.columns and list(table.frame["curated_sex"]) == ["Female"]
+    kept = next(p for p in table.plan if p.source == "curated_sex")
+    assert (kept.action, kept.drop_reason, kept.conflicts_with) == ("dropped", "name_conflict", "sex")
 
 
 def test_formula_like_text_is_escaped_but_numbers_are_not():
@@ -102,17 +154,18 @@ def test_formula_like_text_is_escaped_but_numbers_are_not():
 
 
 def test_column_plan_actions_and_drop_reasons():
-    text, typed = _frames("a,b,c,d,e,f,g,h,i\n1,2,3,4,5,6,7,8,9\n")
+    text, typed = _frames("a,b,c,d,e,f,g,h,i,j\n1,2,3,4,5,6,7,8,9,10\n")
     mappings = [
         _m("a", "alpha"),  # merged with 'e' into 'alpha'
         _m("b", "b"),  # matched: already the schema name
         _m("c", "gamma", status="rejected"),  # kept under its own name
         _m("d", None, status="pending"),  # no target suggested
-        _m("e", "alpha", status="pending", confidence=0.99),  # merged into 'alpha' with 'a'
+        _m("e", "alpha", confidence=0.99),  # merged into 'alpha' with 'a'
         _m("f", "zeta", status="rejected"),
         _m("g", "f", status="pending"),  # takes the name 'f', so rejected 'f' can't be kept
         _m("h", "sample_id"),  # an identifier keeps one column...
         _m("i", "sample_id", status="pending", confidence=0.99),  # ...so 'i' loses to accepted 'h'
+        _m("j", "alpha", status="pending", confidence=0.99),  # unreviewed: not merged into 'alpha'
     ]
 
     table = harmonize_table(text, typed, mappings, {})
@@ -126,11 +179,12 @@ def test_column_plan_actions_and_drop_reasons():
         "b": ("b", "matched", "accepted", None, None),
         "c": ("c", "kept", "rejected", None, None),
         "d": (None, "dropped", "pending", "no_target", None),
-        "e": ("alpha", "merged", "pending", None, None),
+        "e": ("alpha", "merged", "accepted", None, None),
         "f": (None, "dropped", "rejected", "name_conflict", "g"),  # 'g' took the name 'f'
         "g": ("f", "renamed", "pending", None, None),
         "h": ("sample_id", "renamed", "accepted", None, None),
         "i": (None, "dropped", "pending", "duplicate_target", "h"),  # 'h' took 'sample_id'
+        "j": (None, "dropped", "pending", "duplicate_target", "a"),  # 'alpha' has accepted columns
     }
     # A merged column sits where its first column was uploaded.
     assert list(table.frame.columns) == ["alpha", "b", "c", "f", "sample_id"]
@@ -157,35 +211,106 @@ def test_merged_columns_join_distinct_values_in_upload_order():
 
 
 def test_merge_follows_the_labs_curated_cbioportal_metadata():
-    # Rows of MetaHarmonizer's examples/data/query_with_selected_fields_for_bie.csv:
-    # the diagnosis columns' values, in column order, become their terms, a
-    # repeat is listed once, and "<;>" keeps "...; INTRAHEPATIC" one value.
+    # Rows of MetaHarmonizer's examples/data/query_with_selected_fields_for_bie.csv,
+    # written as the lab writes them: the original value keeps every value
+    # (repeats too) in capitals, the curated value lists each term once, and
+    # "<;>" keeps "...; INTRAHEPATIC" one value.
+    from app.services.exporter import FieldRewrites
+
     text, typed = _frames(
         "DIAGNOSIS,DIAGNOSIS_AT_INCLUSION,SPECIFIC_DIAGNOSIS,DETAILED\n"
         "MYELODYSPLASTIC SYNDROMES,MYELODYSPLASTIC SYNDROMES,REFRACTORY ANAEMIA WITH EXCESS BLASTS,\n"
         "CHOLANGIOCARCINOMA,,,CHOLANGIOCARCINOMA; INTRAHEPATIC\n"
     )
     mappings = [_m(c, "disease") for c in ("DIAGNOSIS", "DIAGNOSIS_AT_INCLUSION", "SPECIFIC_DIAGNOSIS", "DETAILED")]
-    rewrites = {
-        "disease": {
-            "MYELODYSPLASTIC SYNDROMES": "Myelodysplastic Syndrome",
-            "REFRACTORY ANAEMIA WITH EXCESS BLASTS": "Myelodysplastic Syndrome with Excess Blasts",
-            "CHOLANGIOCARCINOMA": "Cholangiocarcinoma",
-            "CHOLANGIOCARCINOMA; INTRAHEPATIC": "Intrahepatic Cholangiocarcinoma",
-        }
+    disease = FieldRewrites()
+    for raw, term, term_id in [
+        ("MYELODYSPLASTIC SYNDROMES", "Myelodysplastic Syndrome", "NCIT:C3247"),
+        ("REFRACTORY ANAEMIA WITH EXCESS BLASTS", "Myelodysplastic Syndrome with Excess Blasts", "NCIT:C7506"),
+        ("CHOLANGIOCARCINOMA", "Cholangiocarcinoma", "NCIT:C4436"),
+        ("CHOLANGIOCARCINOMA; INTRAHEPATIC", "Intrahepatic Cholangiocarcinoma", "NCIT:C35417"),
+    ]:
+        disease[raw], disease.ids[raw] = term, term_id
+
+    table = harmonize_table(text, typed, mappings, {"disease": disease})
+
+    assert table.frame.to_dict("list") == {
+        "original_disease_value": [
+            "MYELODYSPLASTIC SYNDROMES<;>MYELODYSPLASTIC SYNDROMES<;>REFRACTORY ANAEMIA WITH EXCESS BLASTS",
+            "CHOLANGIOCARCINOMA<;>CHOLANGIOCARCINOMA; INTRAHEPATIC",
+        ],
+        "curated_disease": [  # the curated_disease values in that file
+            "Myelodysplastic Syndrome<;>Myelodysplastic Syndrome with Excess Blasts",
+            "Cholangiocarcinoma<;>Intrahepatic Cholangiocarcinoma",
+        ],
+        "curated_disease_ontology_term_id": ["NCIT:C3247<;>NCIT:C7506", "NCIT:C4436<;>NCIT:C35417"],
+        "curated_disease_source": [
+            "DIAGNOSIS;DIAGNOSIS_AT_INCLUSION;SPECIFIC_DIAGNOSIS",
+            "DIAGNOSIS;DETAILED",
+        ],
     }
 
-    table = harmonize_table(text, typed, mappings, rewrites)
 
-    assert list(table.frame.columns) == ["disease"]
-    assert list(table.frame["disease"]) == [  # the curated_disease values in that file
-        "Myelodysplastic Syndrome<;>Myelodysplastic Syndrome with Excess Blasts",
-        "Cholangiocarcinoma<;>Intrahepatic Cholangiocarcinoma",
-    ]
-    assert list(table.original["disease"]) == [
-        "MYELODYSPLASTIC SYNDROMES<;>REFRACTORY ANAEMIA WITH EXCESS BLASTS",
-        "CHOLANGIOCARCINOMA<;>CHOLANGIOCARCINOMA; INTRAHEPATIC",
-    ]
+def test_a_value_with_several_terms_follows_the_labs_harmonized_files():
+    # MetaHarmonizer_Test_Data, data/per_study/harmonized/coad_silu_2022_harmonized.csv.
+    # The lab's body site map gives one value several terms ("Liver, Inguinal" is
+    # Liver and Inguinal Region); a curator records them joined by "<;>".
+    from app.services.exporter import FieldRewrites
+
+    text, typed = _frames(
+        "LOCATION_METASTASIS_AT_DX,TUMOR_ANATOMIC_LOCATION\n"
+        '"Bronchus, Lung, Liver, Lymph Node Intra-Abdominal",Ceceum\n'
+        '"Liver, Inguinal",Colon Transversum\n'
+    )
+    site = FieldRewrites()
+    for raw, terms, ids in [
+        (
+            "Bronchus, Lung, Liver, Lymph Node Intra-Abdominal",
+            "Intra-Abdominal Lymph Node<;>Bronchus<;>Lung<;>Liver",
+            "NCIT:C12360<;>NCIT:C12683<;>NCIT:C12468<;>NCIT:C12392",
+        ),
+        ("Ceceum", "Cecum", "NCIT:C12381"),
+        ("Liver, Inguinal", "Liver<;>Inguinal Region", "NCIT:C12392<;>NCIT:C12726"),
+        ("Colon Transversum", "Transverse Colon", "NCIT:C12385"),
+    ]:
+        site[raw], site.ids[raw] = terms, ids
+    mappings = [_m("LOCATION_METASTASIS_AT_DX", "body_site"), _m("TUMOR_ANATOMIC_LOCATION", "body_site")]
+
+    table = harmonize_table(text, typed, mappings, {"body_site": site})
+
+    assert table.frame.to_dict("list") == {
+        "original_body_site_value": [
+            "BRONCHUS, LUNG, LIVER, LYMPH NODE INTRA-ABDOMINAL<;>CECEUM",
+            "LIVER, INGUINAL<;>COLON TRANSVERSUM",
+        ],
+        "curated_body_site": [
+            "Intra-Abdominal Lymph Node<;>Bronchus<;>Lung<;>Liver<;>Cecum",
+            "Liver<;>Inguinal Region<;>Transverse Colon",
+        ],
+        "curated_body_site_ontology_term_id": [
+            "NCIT:C12360<;>NCIT:C12683<;>NCIT:C12468<;>NCIT:C12392<;>NCIT:C12381",
+            "NCIT:C12392<;>NCIT:C12726<;>NCIT:C12385",
+        ],
+        "curated_body_site_source": [  # that file joins these two with "<;>", most with ";"
+            "LOCATION_METASTASIS_AT_DX;TUMOR_ANATOMIC_LOCATION",
+            "LOCATION_METASTASIS_AT_DX;TUMOR_ANATOMIC_LOCATION",
+        ],
+    }
+
+
+def test_each_term_of_a_row_is_listed_once_with_its_id():
+    from app.services.exporter import FieldRewrites
+
+    text, typed = _frames("a,b\nAbdomen/Pelvis,pelvis\n")
+    site = FieldRewrites()
+    site["Abdomen/Pelvis"], site.ids["Abdomen/Pelvis"] = "Abdomen<;>Pelvis", "NCIT:C12664"
+    site["pelvis"], site.ids["pelvis"] = "Pelvis", "NCIT:C12767"
+
+    table = harmonize_table(text, typed, [_m("a", "body_site"), _m("b", "body_site")], {"body_site": site})
+
+    assert list(table.frame["curated_body_site"]) == ["Abdomen<;>Pelvis"]
+    # The first value has no id for Pelvis; the second value's id fills it.
+    assert list(table.frame["curated_body_site_ontology_term_id"]) == ["NCIT:C12664<;>NCIT:C12767"]
 
 
 def test_merged_columns_rewrite_each_value_before_joining():
@@ -194,37 +319,50 @@ def test_merged_columns_rewrite_each_value_before_joining():
 
     table = harmonize_table(text, typed, [_m("Gender", "sex"), _m("Sex", "sex")], rewrites)
 
-    # F and female are both "Female", so the first row holds one value.
-    assert list(table.frame["sex"]) == ["Female", "Male", "Female"]
-    assert list(table.original["sex"]) == ["F<;>female", "M", "F"]
-    assert list(table.rewritten["sex"]) == [True, True, True]
+    # F and female are both "Female", so the first row's curated value holds one term.
+    assert list(table.frame["curated_sex"]) == ["Female", "Male", "Female"]
+    assert list(table.frame["original_sex_value"]) == ["F<;>FEMALE", "M", "F"]
+    assert list(table.frame["curated_sex_source"]) == ["Gender;Sex", "Gender", "Sex"]
+    assert list(table.original["curated_sex"]) == ["F<;>female", "M", "F"]
+    assert list(table.rewritten["curated_sex"]) == [True, True, True]
 
 
 def test_preview_shows_a_merged_column_once_with_its_changes():
     text, typed = _frames("Gender,id,Sex\nF,1,female\nM,2,M\n,3,\n")
-    mappings = [_m("Gender", "sex"), _m("id", "sample_id"), _m("Sex", "sex", status="pending")]
+    mappings = [_m("Gender", "sex"), _m("id", "sample_id"), _m("Sex", "sex", confidence=0.6)]
     table = harmonize_table(text, typed, mappings, {"sex": {"F": "Female", "female": "Female"}})
 
     preview = build_preview("s1", text, table)
 
     summary = preview["summary"]
-    assert (summary["columns_before"], summary["columns_after"]) == (3, 2)
+    assert (summary["columns_before"], summary["columns_after"]) == (3, 5)
     assert (summary["merged"], summary["renamed"], summary["dropped"]) == (2, 1, 0)
-    assert summary["pending"] == 1
+    assert summary["pending"] == 0
     by_source = {c["source"]: c for c in preview["columns"]}
     assert (by_source["Gender"]["action"], by_source["Sex"]["action"]) == ("merged", "merged")
-    # The merged column's changes are reported once, on its first column.
-    assert by_source["Gender"]["changed_cells"] == 1
+    assert by_source["Gender"]["target"] == "curated_sex"
+    # The merged column's changes are reported once, on its first column; "M"
+    # has no confirmed term, so the curated value leaves it out.
+    assert by_source["Gender"]["changed_cells"] == 2
     assert by_source["Gender"]["value_changes"] == [
-        {"before": "F<;>female", "after": "Female", "count": 1, "reason": "ontology"}
+        {"before": "F<;>female", "after": "Female", "count": 1, "reason": "ontology"},
+        {"before": "M<;>M", "after": "NA", "count": 1, "reason": "other"},
     ]
     assert (by_source["Sex"]["changed_cells"], by_source["Sex"]["value_changes"]) == (0, [])
     rows = preview["rows"]
-    assert rows["columns"] == ["sex", "sample_id"]
-    assert [r["values"] for r in rows["items"]] == [["Female", "1"], ["M", "2"], ["", "3"]]
-    # Merging alone ("M" and "M") is not a value change.
+    assert rows["columns"] == [
+        "original_sex_value", "curated_sex", "curated_sex_ontology_term_id", "curated_sex_source", "sample_id",
+    ]
+    assert [r["values"] for r in rows["items"]] == [
+        ["F<;>FEMALE", "Female", "NA", "Gender;Sex", "1"],
+        ["M<;>M", "NA", "NA", "Gender;Sex", "2"],
+        ["NA", "NA", "NA", "NA", "3"],
+    ]
+    # Only the curated column compares with the upload.
     assert [r["changes"] for r in rows["items"]] == [
-        [{"column": 0, "before": "F<;>female", "reason": "ontology"}], [], []
+        [{"column": 1, "before": "F<;>female", "reason": "ontology"}],
+        [{"column": 1, "before": "M<;>M", "reason": "other"}],
+        [],
     ]
 
 
@@ -262,16 +400,16 @@ def test_preview_summary_and_grouped_value_changes():
     assert preview["summary"] == {
         "rows": 4,
         "columns_before": 4,
-        "columns_after": 4,
+        "columns_after": 10,  # sex and body_site are curated: four columns each
         "renamed": 3,
         "matched": 1,
         "merged": 0,
         "kept": 0,
         "dropped": 0,
         "pending": 1,
-        "changed_cells": 8,
+        "changed_cells": 9,
         "changed_rows": 4,
-        "compared_cells": 16,
+        "compared_cells": 40,
     }
     by_source = {c["source"]: c for c in preview["columns"]}
     assert by_source["sex"]["value_changes"] == [
@@ -279,8 +417,10 @@ def test_preview_summary_and_grouped_value_changes():
         {"before": "M", "after": "Male", "count": 1, "reason": "ontology"},
     ]
     assert by_source["site"]["mapping_status"] == "pending"
+    # "skin" has no confirmed term, so the curated value leaves it out.
     assert by_source["site"]["value_changes"] == [
-        {"before": "stool", "after": "feces", "count": 3, "reason": "ontology"}
+        {"before": "stool", "after": "feces", "count": 3, "reason": "ontology"},
+        {"before": "skin", "after": "NA", "count": 1, "reason": "other"},
     ]
     assert by_source["note"]["value_changes"] == [
         {"before": "=1+1", "after": "'=1+1", "count": 1, "reason": "escaped"}
@@ -330,15 +470,21 @@ def test_preview_rows_page_and_filters():
     text, table = _preview_fixture()
 
     page = build_preview("s1", text, table, offset=1, limit=2)["rows"]
-    assert page["columns"] == ["sample_id", "sex", "body_site", "comment"]
+    assert page["columns"] == [
+        "sample_id",
+        "original_sex_value", "curated_sex", "curated_sex_ontology_term_id", "curated_sex_source",
+        "original_body_site_value", "curated_body_site", "curated_body_site_ontology_term_id",
+        "curated_body_site_source",
+        "comment",
+    ]
     assert page["total"] == 4 and [r["line"] for r in page["items"]] == [2, 3]
     assert page["changed_total"] == 4
     second = page["items"][0]
-    assert second["values"] == ["2", "Male", "feces", "'=1+1"]
+    assert second["values"] == ["2", "M", "Male", "NA", "sex", "STOOL", "feces", "NA", "site", "'=1+1"]
     assert second["changes"] == [
-        {"column": 1, "before": "M", "reason": "ontology"},
-        {"column": 2, "before": "stool", "reason": "ontology"},
-        {"column": 3, "before": "=1+1", "reason": "escaped"},
+        {"column": 2, "before": "M", "reason": "ontology"},
+        {"column": 6, "before": "stool", "reason": "ontology"},
+        {"column": 9, "before": "=1+1", "reason": "escaped"},
     ]
 
     only_comment = build_preview("s1", text, table, changed_only=True, columns=["comment"])["rows"]
@@ -352,20 +498,22 @@ def test_preview_rows_page_and_filters():
 def test_preview_filters_rows_changed_in_any_chosen_column():
     text, typed = _frames("id,a,b,c\n1,x,p,k\n2,y,q,k\n3,x,q,k\n4,z,p,k\n")
     mappings = [_m("id", "sample_id"), _m("a", "alpha"), _m("b", "beta"), _m("c", "gamma")]
-    table = harmonize_table(text, typed, mappings, {"alpha": {"x": "X"}, "beta": {"q": "Q"}})
+    # Every value has a confirmed term; only x and q change.
+    terms = {"alpha": {"x": "X", "y": "y", "z": "z"}, "beta": {"q": "Q", "p": "p"}}
+    table = harmonize_table(text, typed, mappings, terms)
 
     def lines(**kwargs):
         rows = build_preview("s1", text, table, **kwargs)["rows"]
         return [r["line"] for r in rows["items"]], rows["changed_total"]
 
-    assert lines(changed_only=True, columns=["alpha"]) == ([1, 3], 2)
-    assert lines(changed_only=True, columns=["beta"]) == ([2, 3], 2)
-    assert lines(changed_only=True, columns=["beta", "alpha"]) == ([1, 2, 3], 3)
+    assert lines(changed_only=True, columns=["curated_alpha"]) == ([1, 3], 2)
+    assert lines(changed_only=True, columns=["curated_beta"]) == ([2, 3], 2)
+    assert lines(changed_only=True, columns=["curated_beta", "curated_alpha"]) == ([1, 2, 3], 3)
     # A renamed column and an untouched one have no changed values.
     assert lines(changed_only=True, columns=["sample_id", "gamma"]) == ([], 0)
     # No scope means every column; without changed_only every row is kept.
     assert lines(changed_only=True) == ([1, 2, 3], 3)
-    assert lines(columns=["alpha"]) == ([1, 2, 3, 4], 2)
+    assert lines(columns=["curated_alpha"]) == ([1, 2, 3, 4], 2)
 
 
 def test_preview_rejects_unknown_column():
@@ -374,7 +522,7 @@ def test_preview_rejects_unknown_column():
         build_preview("s1", text, table, columns=["not_exported"])
     # Filters use export names: the upload's "note" is exported as "comment".
     with pytest.raises(UnknownColumnError, match="'note', 'x' are not columns"):
-        build_preview("s1", text, table, columns=["sex", "note", "x"])
+        build_preview("s1", text, table, columns=["curated_sex", "note", "x"])
 
 
 def test_preview_with_renames_only_has_no_changed_rows():

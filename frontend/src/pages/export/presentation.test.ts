@@ -6,6 +6,7 @@ import {
   changesByColumn,
   clampOffset,
   columnsHint,
+  companionColumns,
   describeColumnChange,
   formatPercent,
   mergedFrom,
@@ -162,6 +163,30 @@ describe('grid helpers', () => {
     expect(columnsHint(0, 0, 2)).toBe('2 not exported');
     expect(columnsHint(2, 1, 0)).toBe('2 merged into 1 column');
     expect(columnsHint(5, 2, 1)).toBe('5 merged into 2 columns · 1 not exported');
+  });
+
+  it("describes a curated field's companion columns", () => {
+    const study = [
+      column({ source: 'Gender', target: 'curated_sex', action: 'merged', changed_cells: 2 }),
+      column({ source: 'Sex', target: 'curated_sex', action: 'merged' }),
+      column({ source: 'id', target: 'sample_id' }),
+      // A schema field that only looks curated: its companions are not exported.
+      column({ source: 'flag', target: 'curated_flag' }),
+    ];
+    const exported = [
+      'original_sex_value',
+      'curated_sex',
+      'curated_sex_ontology_term_id',
+      'curated_sex_source',
+      'sample_id',
+      'curated_flag',
+    ];
+    expect(companionColumns(study, exported)).toEqual({
+      original_sex_value: 'uploaded values of curated_sex',
+      curated_sex_ontology_term_id: 'ontology term ids of curated_sex',
+      curated_sex_source: 'uploaded columns of curated_sex',
+    });
+    expect(companionColumns(study, ['sample_id'])).toEqual({});
   });
 });
 

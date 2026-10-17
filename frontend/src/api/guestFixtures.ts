@@ -154,7 +154,8 @@ const demoQuality: QualityMetrics = {
 };
 
 /* Export preview: the demo study's harmonized CSV vs. its upload. Cell values
- * are generated deterministically from the row number. */
+ * are generated deterministically from the row number. As in the backend
+ * exporter, a field with ontology terms is written as the lab's four columns. */
 
 interface DemoExportColumn {
     source: string;
@@ -164,6 +165,32 @@ interface DemoExportColumn {
     value: (row: number) => string;
     rewrite?: Record<string, string>;
 }
+
+/** One column of the demo's harmonized CSV: each row's uploaded and exported text. */
+interface DemoOutput {
+    name: string;
+    cell: (row: number) => { before: string; after: string };
+}
+
+const MISSING = 'NA';
+
+/** The export column a demo column's changes are reported under. */
+const exportName = (c: DemoExportColumn) => (c.target !== null && c.rewrite ? `curated_${c.target}` : c.target);
+
+function demoOutputs({ source, target, value, rewrite }: DemoExportColumn): DemoOutput[] {
+    if (target === null) return [];
+    const same = (text: (row: number) => string) => (row: number) => ({ before: text(row), after: text(row) });
+    if (!rewrite) return [{ name: target, cell: same(value) }];
+    return [
+        { name: `original_${target}_value`, cell: same((r) => value(r).toUpperCase()) },
+        { name: `curated_${target}`, cell: (r) => ({ before: value(r), after: rewrite[value(r)] ?? MISSING }) },
+        // The demo's terms carry no ontology ids.
+        { name: `curated_${target}_ontology_term_id`, cell: same(() => MISSING) },
+        { name: `curated_${target}_source`, cell: same(() => source) },
+    ];
+}
+
+const changeReason = (after: string) => (after === MISSING ? ('other' as const) : ('ontology' as const));
 
 const pick = (options: string[], row: number, salt: number) => options[(row * 7 + salt * 5) % options.length];
 
@@ -227,19 +254,15 @@ function demoExportPreview(params: URLSearchParams): ExportPreview {
     const limit = Math.max(1, Number(params.get('limit') ?? 50) || 50);
     const changedOnly = params.get('changed_only') === 'true';
     const scope = params.getAll('column');
-    const outputs = demoExportColumns.filter((c) => c.target !== null);
+    const outputs = demoExportColumns.flatMap(demoOutputs);
     const rowCount = demoStudy.row_count ?? 0;
 
-    const cells = Array.from({ length: rowCount }, (_, r) =>
-        outputs.map((c) => {
-            const before = c.value(r);
-            return { before, after: c.rewrite?.[before] ?? before };
-        }),
-    );
+    const cells = Array.from({ length: rowCount }, (_, r) => outputs.map((o) => o.cell(r)));
     const changed = (r: number, j: number) => cells[r][j].before !== cells[r][j].after;
 
     const columns: ExportColumnChange[] = demoExportColumns.map((c) => {
-        const j = outputs.indexOf(c);
+        const target = exportName(c);
+        const j = outputs.findIndex((o) => o.name === target);
         const counts = new Map<string, { before: string; after: string; count: number }>();
         if (j !== -1) {
             cells.forEach((row) => {
@@ -251,13 +274,13 @@ function demoExportPreview(params: URLSearchParams): ExportPreview {
         }
         const value_changes = [...counts.values()]
             .sort((a, b) => b.count - a.count || a.before.localeCompare(b.before))
-            .map((v) => ({ ...v, reason: 'ontology' as const }));
+            .map((v) => ({ ...v, reason: changeReason(v.after) }));
         return {
             source: c.source,
-            target: c.target,
+            target,
             action: c.action,
             mapping_status: c.mapping_status,
-            drop_reason: c.target === null ? 'no_target' : null,
+            drop_reason: target === null ? 'no_target' : null,
             conflicts_with: null,
             changed_cells: value_changes.reduce((sum, v) => sum + v.count, 0),
             value_changes,
@@ -265,7 +288,7 @@ function demoExportPreview(params: URLSearchParams): ExportPreview {
         };
     });
 
-    const scoped = outputs.flatMap((c, j) => (scope.length === 0 || scope.includes(c.target as string) ? [j] : []));
+    const scoped = outputs.flatMap((o, j) => (scope.length === 0 || scope.includes(o.name) ? [j] : []));
     const changedLines = cells.map((_, r) => r).filter((r) => scoped.some((j) => changed(r, j)));
     const lines = changedOnly ? changedLines : cells.map((_, r) => r);
     const changedCells = columns.reduce((sum, c) => sum + c.changed_cells, 0);
@@ -282,7 +305,7 @@ function demoExportPreview(params: URLSearchParams): ExportPreview {
             merged: count('merged'),
             kept: count('kept'),
             dropped: count('dropped'),
-            pending: outputs.filter((c) => c.mapping_status === 'pending').length,
+            pending: demoExportColumns.filter((c) => c.target !== null && c.mapping_status === 'pending').length,
             changed_cells: changedCells,
             changed_rows: cells.filter((_, r) => outputs.some((__, j) => changed(r, j))).length,
             compared_cells: rowCount * outputs.length,
@@ -293,12 +316,14 @@ function demoExportPreview(params: URLSearchParams): ExportPreview {
             changed_total: changedLines.length,
             offset,
             limit,
-            columns: outputs.map((c) => c.target as string),
+            columns: outputs.map((o) => o.name),
             items: lines.slice(offset, offset + limit).map((r) => ({
                 line: r + 1,
                 values: cells[r].map((cell) => cell.after),
                 changes: cells[r].flatMap((cell, j) =>
-                    cell.before !== cell.after ? [{ column: j, before: cell.before, reason: 'ontology' as const }] : [],
+                    cell.before !== cell.after
+                        ? [{ column: j, before: cell.before, reason: changeReason(cell.after) }]
+                        : [],
                 ),
             })),
         },

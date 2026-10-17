@@ -32,8 +32,15 @@ describe('guest export preview', () => {
     const exported = columns.filter((c) => c.target !== null);
 
     expect(summary.columns_before).toBe(columns.length);
-    expect(summary.columns_after).toBe(exported.length);
-    expect(rows.columns).toEqual(exported.map((c) => c.target));
+    expect(summary.columns_after).toBe(rows.columns.length);
+    // Every exported column is in the grid; a curated field adds the lab's companion columns.
+    expect(rows.columns).toEqual(expect.arrayContaining(exported.map((c) => c.target)));
+    for (const curated of exported.map((c) => c.target!).filter((name) => name.startsWith('curated_'))) {
+      const field = curated.slice('curated_'.length);
+      expect(rows.columns).toEqual(
+        expect.arrayContaining([`original_${field}_value`, `curated_${field}_ontology_term_id`, `curated_${field}_source`]),
+      );
+    }
     expect(summary.renamed + summary.matched + summary.merged + summary.kept + summary.dropped).toBe(columns.length);
     expect(summary.pending).toBe(exported.filter((c) => c.mapping_status === 'pending').length);
     expect(summary.compared_cells).toBe(summary.rows * summary.columns_after);

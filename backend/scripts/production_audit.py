@@ -460,7 +460,27 @@ async def run(origin: str) -> AuditReport:
             )
             harmonized = list(csv.DictReader(io.StringIO(harmonized_response.text)))
             require(len(harmonized) == 3, "harmonized export row count changed")
-            require("body_site" in harmonized[0], f"harmonized export lacks curated body_site: {list(harmonized[0])}")
+            # A field mapped to an ontology is written as the lab's four columns.
+            curated_site = [
+                "original_body_site_value",
+                "curated_body_site",
+                "curated_body_site_ontology_term_id",
+                "curated_body_site_source",
+            ]
+            require(
+                all(name in harmonized[0] for name in curated_site),
+                f"harmonized export lacks the curated body_site columns: {list(harmonized[0])}",
+            )
+            require(
+                [row["original_body_site_value"] for row in harmonized] == ["LUNG", "LIVER", "LUNG"]
+                and all(
+                    row["curated_body_site"] != "NA"
+                    and row["curated_body_site_ontology_term_id"] != "NA"
+                    and row["curated_body_site_source"] == "biopsy_location"
+                    for row in harmonized
+                ),
+                f"curated body_site columns are wrong: {[{k: row[k] for k in curated_site} for row in harmonized]}",
+            )
             require("treatment_name" in harmonized[0], "rejected raw column was dropped from harmonized export")
             rejected_target = rejected_mapping.get("matched_field")
             if rejected_target and rejected_target != "treatment_name":
