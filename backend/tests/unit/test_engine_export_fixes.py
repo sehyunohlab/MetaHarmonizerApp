@@ -61,17 +61,17 @@ def test_value_rewrite_map_applies_accepted_terms():
     assert list(rewritten) == ["Adult", "feces", "weird", None]
 
 
-async def test_harmonized_export_dedupes_target_columns(monkeypatch):
-    """Many source columns -> one target field must yield a single, non-duplicated
-    output column: accepted beats pending, then higher confidence wins."""
+async def test_harmonized_export_merges_columns_mapped_to_one_field(monkeypatch):
+    """Many source columns -> one target field yield a single output column
+    holding each row's distinct values, in upload order, separated by '<;>'."""
     from app.repositories import mappings as mappings_repo
     from app.repositories import ontology as ontology_repo
     from app.services import exporter
 
     raw_df = pd.DataFrame({
         "dx": ["a", "b"],
-        "diagnosis": ["c", "d"],
-        "primary_disease": ["e", "f"],
+        "diagnosis": ["c", "b"],
+        "primary_disease": ["e", None],
         "age": [1, 2],
     })
     mappings = [
@@ -98,10 +98,9 @@ async def test_harmonized_export_dedupes_target_columns(monkeypatch):
     lines = out.splitlines()
     header = lines[0].split(",")
     # 'disease' appears exactly once (no duplicate columns) and 'age' mapped too.
-    assert header.count("disease") == 1
-    assert "age_at_procurement" in header
-    # The accepted, highest-confidence source ('diagnosis' -> c,d) won.
-    assert lines[1].split(",")[header.index("disease")] == "c"
+    assert header == ["disease", "age_at_procurement"]
+    # Row 1 has three values; row 2 repeats 'b' and has no primary_disease.
+    assert [line.split(",")[0] for line in lines[1:]] == ["a<;>c<;>e", "b"]
 
 
 async def test_harmonized_export_uses_curator_override_and_preserves_rejected_raw(monkeypatch):

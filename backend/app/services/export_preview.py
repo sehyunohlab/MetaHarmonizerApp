@@ -49,12 +49,11 @@ def build_preview(
         verb = "is not a column" if len(unknown) == 1 else "are not columns"
         raise UnknownColumnError(f"{names} {verb} of the harmonized export.")
 
-    source_of = {p.target: p.source for p in table.plan if p.target is not None}
     position = {target: j for j, target in enumerate(targets)}
     n_rows = len(table.frame.index)
 
     # (row, export column) grids: uploaded text, exported text, and why they differ.
-    before = raw_text[[source_of[t] for t in targets]].to_numpy(dtype=object)
+    before = table.original[targets].to_numpy(dtype=object)
     after = table.frame.to_numpy(dtype=object)
     changed = before != after
     reasons = np.where(
@@ -66,8 +65,13 @@ def build_preview(
     changed_per_column = changed.sum(axis=0)
     value_changes, more_value_changes = _value_changes(before, after, reasons, changed)
     column_report = []
+    reported: set[int] = set()
     for plan in table.plan:
         j = position.get(plan.target) if plan.target is not None else None
+        # A merged column's changes are reported once, on its first source.
+        first = j is not None and j not in reported
+        if first:
+            reported.add(j)
         column_report.append(
             {
                 "source": plan.source,
@@ -76,9 +80,9 @@ def build_preview(
                 "mapping_status": plan.mapping_status,
                 "drop_reason": plan.drop_reason,
                 "conflicts_with": plan.conflicts_with,
-                "changed_cells": int(changed_per_column[j]) if j is not None else 0,
-                "value_changes": value_changes.get(j, []) if j is not None else [],
-                "more_value_changes": more_value_changes.get(j, 0) if j is not None else 0,
+                "changed_cells": int(changed_per_column[j]) if first else 0,
+                "value_changes": value_changes.get(j, []) if first else [],
+                "more_value_changes": more_value_changes.get(j, 0) if first else 0,
             }
         )
 
@@ -90,6 +94,7 @@ def build_preview(
         "columns_after": len(targets),
         "renamed": actions.count("renamed"),
         "matched": actions.count("matched"),
+        "merged": actions.count("merged"),
         "kept": actions.count("kept"),
         "dropped": actions.count("dropped"),
         "pending": sum(

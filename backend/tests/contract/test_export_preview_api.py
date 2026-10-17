@@ -143,6 +143,7 @@ async def test_preview_matches_the_download_and_does_not_mark_export(env):
             "columns_after": 4,
             "renamed": 4,
             "matched": 0,
+            "merged": 0,
             "kept": 0,
             "dropped": 0,
             "pending": 1,

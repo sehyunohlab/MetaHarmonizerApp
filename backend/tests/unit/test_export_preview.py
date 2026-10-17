@@ -102,15 +102,17 @@ def test_formula_like_text_is_escaped_but_numbers_are_not():
 
 
 def test_column_plan_actions_and_drop_reasons():
-    text, typed = _frames("a,b,c,d,e,f,g\n1,2,3,4,5,6,7\n")
+    text, typed = _frames("a,b,c,d,e,f,g,h,i\n1,2,3,4,5,6,7,8,9\n")
     mappings = [
-        _m("a", "alpha"),  # renamed
+        _m("a", "alpha"),  # merged with 'e' into 'alpha'
         _m("b", "b"),  # matched: already the schema name
         _m("c", "gamma", status="rejected"),  # kept under its own name
         _m("d", None, status="pending"),  # no target suggested
-        _m("e", "alpha", status="pending", confidence=0.99),  # loses 'alpha' to accepted 'a'
+        _m("e", "alpha", status="pending", confidence=0.99),  # merged into 'alpha' with 'a'
         _m("f", "zeta", status="rejected"),
         _m("g", "f", status="pending"),  # takes the name 'f', so rejected 'f' can't be kept
+        _m("h", "sample_id"),  # an identifier keeps one column...
+        _m("i", "sample_id", status="pending", confidence=0.99),  # ...so 'i' loses to accepted 'h'
     ]
 
     table = harmonize_table(text, typed, mappings, {})
@@ -120,15 +122,110 @@ def test_column_plan_actions_and_drop_reasons():
     }
 
     assert plan == {
-        "a": ("alpha", "renamed", "accepted", None, None),
+        "a": ("alpha", "merged", "accepted", None, None),
         "b": ("b", "matched", "accepted", None, None),
         "c": ("c", "kept", "rejected", None, None),
         "d": (None, "dropped", "pending", "no_target", None),
-        "e": (None, "dropped", "pending", "duplicate_target", "a"),  # 'a' took 'alpha'
+        "e": ("alpha", "merged", "pending", None, None),
         "f": (None, "dropped", "rejected", "name_conflict", "g"),  # 'g' took the name 'f'
         "g": ("f", "renamed", "pending", None, None),
+        "h": ("sample_id", "renamed", "accepted", None, None),
+        "i": (None, "dropped", "pending", "duplicate_target", "h"),  # 'h' took 'sample_id'
     }
-    assert list(table.frame.columns) == ["alpha", "b", "c", "f"]
+    # A merged column sits where its first column was uploaded.
+    assert list(table.frame.columns) == ["alpha", "b", "c", "f", "sample_id"]
+    assert list(table.frame["alpha"]) == ["1<;>5"]
+
+
+def test_merged_columns_join_distinct_values_in_upload_order():
+    text, typed = _frames(
+        "Ethnicity,id,Region,Origin\n"
+        "Asian,1,Japan,Asian\n"  # 'Asian' twice: listed once
+        ",2,Kenya,\n"  # blank cells are skipped
+        "NA,3,NA,\n"  # a row with no value keeps the first column's text
+        "=x,4,,White\n"  # a merged value starting like a formula is escaped
+    )
+    mappings = [_m("Ethnicity", "race"), _m("id", "sample_id"), _m("Region", "race"), _m("Origin", "race")]
+
+    table = harmonize_table(text, typed, mappings, {})
+
+    assert list(table.frame.columns) == ["race", "sample_id"]
+    assert list(table.frame["race"]) == ["Asian<;>Japan", "Kenya", "NA", "'=x<;>White"]
+    assert list(table.original["race"]) == ["Asian<;>Japan", "Kenya", "NA", "=x<;>White"]
+    assert list(table.escaped["race"]) == [False, False, False, True]
+    assert not table.rewritten["race"].any()
+
+
+def test_merge_follows_the_labs_curated_cbioportal_metadata():
+    # Rows of MetaHarmonizer's examples/data/query_with_selected_fields_for_bie.csv:
+    # the diagnosis columns' values, in column order, become their terms, a
+    # repeat is listed once, and "<;>" keeps "...; INTRAHEPATIC" one value.
+    text, typed = _frames(
+        "DIAGNOSIS,DIAGNOSIS_AT_INCLUSION,SPECIFIC_DIAGNOSIS,DETAILED\n"
+        "MYELODYSPLASTIC SYNDROMES,MYELODYSPLASTIC SYNDROMES,REFRACTORY ANAEMIA WITH EXCESS BLASTS,\n"
+        "CHOLANGIOCARCINOMA,,,CHOLANGIOCARCINOMA; INTRAHEPATIC\n"
+    )
+    mappings = [_m(c, "disease") for c in ("DIAGNOSIS", "DIAGNOSIS_AT_INCLUSION", "SPECIFIC_DIAGNOSIS", "DETAILED")]
+    rewrites = {
+        "disease": {
+            "MYELODYSPLASTIC SYNDROMES": "Myelodysplastic Syndrome",
+            "REFRACTORY ANAEMIA WITH EXCESS BLASTS": "Myelodysplastic Syndrome with Excess Blasts",
+            "CHOLANGIOCARCINOMA": "Cholangiocarcinoma",
+            "CHOLANGIOCARCINOMA; INTRAHEPATIC": "Intrahepatic Cholangiocarcinoma",
+        }
+    }
+
+    table = harmonize_table(text, typed, mappings, rewrites)
+
+    assert list(table.frame.columns) == ["disease"]
+    assert list(table.frame["disease"]) == [  # the curated_disease values in that file
+        "Myelodysplastic Syndrome<;>Myelodysplastic Syndrome with Excess Blasts",
+        "Cholangiocarcinoma<;>Intrahepatic Cholangiocarcinoma",
+    ]
+    assert list(table.original["disease"]) == [
+        "MYELODYSPLASTIC SYNDROMES<;>REFRACTORY ANAEMIA WITH EXCESS BLASTS",
+        "CHOLANGIOCARCINOMA<;>CHOLANGIOCARCINOMA; INTRAHEPATIC",
+    ]
+
+
+def test_merged_columns_rewrite_each_value_before_joining():
+    text, typed = _frames("Gender,Sex\nF,female\nM,\n,F\n")
+    rewrites = {"sex": {"F": "Female", "female": "Female", "M": "Male"}}
+
+    table = harmonize_table(text, typed, [_m("Gender", "sex"), _m("Sex", "sex")], rewrites)
+
+    # F and female are both "Female", so the first row holds one value.
+    assert list(table.frame["sex"]) == ["Female", "Male", "Female"]
+    assert list(table.original["sex"]) == ["F<;>female", "M", "F"]
+    assert list(table.rewritten["sex"]) == [True, True, True]
+
+
+def test_preview_shows_a_merged_column_once_with_its_changes():
+    text, typed = _frames("Gender,id,Sex\nF,1,female\nM,2,M\n,3,\n")
+    mappings = [_m("Gender", "sex"), _m("id", "sample_id"), _m("Sex", "sex", status="pending")]
+    table = harmonize_table(text, typed, mappings, {"sex": {"F": "Female", "female": "Female"}})
+
+    preview = build_preview("s1", text, table)
+
+    summary = preview["summary"]
+    assert (summary["columns_before"], summary["columns_after"]) == (3, 2)
+    assert (summary["merged"], summary["renamed"], summary["dropped"]) == (2, 1, 0)
+    assert summary["pending"] == 1
+    by_source = {c["source"]: c for c in preview["columns"]}
+    assert (by_source["Gender"]["action"], by_source["Sex"]["action"]) == ("merged", "merged")
+    # The merged column's changes are reported once, on its first column.
+    assert by_source["Gender"]["changed_cells"] == 1
+    assert by_source["Gender"]["value_changes"] == [
+        {"before": "F<;>female", "after": "Female", "count": 1, "reason": "ontology"}
+    ]
+    assert (by_source["Sex"]["changed_cells"], by_source["Sex"]["value_changes"]) == (0, [])
+    rows = preview["rows"]
+    assert rows["columns"] == ["sex", "sample_id"]
+    assert [r["values"] for r in rows["items"]] == [["Female", "1"], ["M", "2"], ["", "3"]]
+    # Merging alone ("M" and "M") is not a value change.
+    assert [r["changes"] for r in rows["items"]] == [
+        [{"column": 0, "before": "F<;>female", "reason": "ontology"}], [], []
+    ]
 
 
 def test_columns_without_any_mapping_are_dropped_as_unmapped():
@@ -168,6 +265,7 @@ def test_preview_summary_and_grouped_value_changes():
         "columns_after": 4,
         "renamed": 3,
         "matched": 1,
+        "merged": 0,
         "kept": 0,
         "dropped": 0,
         "pending": 1,

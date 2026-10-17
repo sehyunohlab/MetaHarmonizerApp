@@ -15,6 +15,7 @@ class ExportPreviewSummary(BaseModel):
     columns_after: int
     renamed: int
     matched: int
+    merged: int  # uploaded columns merged with others into one exported column
     kept: int
     dropped: int
     pending: int  # exported columns whose mapping is still awaiting review
@@ -33,11 +34,11 @@ class ExportValueChange(BaseModel):
 class ExportColumnChange(BaseModel):
     source: str
     target: str | None
-    action: Literal["renamed", "matched", "kept", "dropped"]
+    action: Literal["renamed", "matched", "merged", "kept", "dropped"]
     mapping_status: Literal["accepted", "pending", "rejected", "unmapped"]
     drop_reason: Literal["no_target", "duplicate_target", "name_conflict"] | None
     conflicts_with: str | None  # dropped: the source column that took its export name
-    changed_cells: int
+    changed_cells: int  # a merged column's changes are counted on its first source only
     value_changes: list[ExportValueChange]  # every ontology rewrite, then the most frequent others
     more_value_changes: int  # distinct non-ontology changes not listed in value_changes
 

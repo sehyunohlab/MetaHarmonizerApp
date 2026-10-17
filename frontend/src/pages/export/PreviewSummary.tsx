@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, ArrowRightLeft, Columns3, Download, Rows3, Sparkles } from 'lucide-react';
 import type { ExportPreviewSummary } from '../../api/types';
 import { Card, CardBody } from '../../components/ui/Card';
-import { formatPercent, pluralize } from './presentation';
+import { columnsHint, formatPercent, pluralize } from './presentation';
 
 const TILE_TONE = {
   slate: 'bg-slate-100 text-slate-600 dark:bg-slate-800/70 dark:text-slate-300',
@@ -43,11 +43,14 @@ function SummaryTile({
 export function PreviewSummary({
   studyId,
   summary,
+  mergedInto,
   downloading,
   onDownload,
 }: {
   studyId: string;
   summary: ExportPreviewSummary;
+  /** Exported columns that several uploaded columns were merged into. */
+  mergedInto: number;
   downloading: boolean;
   onDownload: () => void;
 }) {
@@ -84,7 +87,7 @@ export function PreviewSummary({
           icon={<Columns3 className="h-4 w-4" />}
           label="Columns"
           value={`${n(summary.columns_before)} → ${n(summary.columns_after)}`}
-          hint={summary.dropped ? `${n(summary.dropped)} not exported` : 'Every column is exported'}
+          hint={columnsHint(summary.merged, mergedInto, summary.dropped)}
           tone="primary"
         />
         <SummaryTile

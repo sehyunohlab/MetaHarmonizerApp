@@ -14,7 +14,7 @@ import io
 import json
 import re
 import zipfile
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -201,6 +201,24 @@ def _find_id_column(df: pd.DataFrame, candidates: list[str]) -> str:
 
 # Column selection (shared by every export)
 
+# Several columns mapped to one field are merged into it, as in the lab's
+# curated cBioPortal metadata (MetaHarmonizer's examples/data/
+# query_with_selected_fields_for_bie.csv): each row's non-empty values, in
+# column order, become their confirmed terms, repeats are listed once, and they
+# are separated by ``<;>``. Single values can contain ``;`` (``CHOLANGIOCARCINOMA;
+# INTRAHEPATIC``), so ``;`` would be ambiguous; the engine splits cells on both.
+MULTI_VALUE_DELIMITER = "<;>"
+
+# Identifier fields hold one value per row, so their columns are never merged:
+# cBioPortal's PATIENT_ID / SAMPLE_ID and the names exports look for them under.
+PATIENT_ID_CANDIDATES = ["subject_id", "patient_id", "participant_id", "case_id"]
+SAMPLE_ID_CANDIDATES = ["sample_id", "run_id", "sampleid", "accession"]
+_ID_FIELDS = {
+    "PATIENT_ID",
+    "SAMPLE_ID",
+    *(name.upper() for name in (*PATIENT_ID_CANDIDATES, *SAMPLE_ID_CANDIDATES)),
+}
+
 
 def mapping_target(mapping: dict[str, Any]) -> str | None:
     """The schema field a mapping fills in an export, if any.
@@ -222,13 +240,14 @@ def _select_sources(
     columns: Sequence[str],
     key: Callable[[str], str] | None = None,
 ) -> dict[str, tuple[str, str]]:
-    """Choose one source column per schema field: ``{field key: (column, field)}``.
+    """The highest-ranked column for each schema field: ``{field key: (column, field)}``.
 
-    A mapping a curator reviewed beats one the engine accepted on its own, which
-    beats a pending suggestion; then higher confidence wins, then the column
-    that comes first in the upload, so the choice never depends on the order
-    mappings are stored in. ``key`` folds field names that must not repeat in an
-    export (cBioPortal attribute ids).
+    It is an identifier field's only column, and its field name is the one an
+    export uses. A mapping a curator reviewed beats one the engine accepted on
+    its own, which beats a pending suggestion; then higher confidence wins,
+    then the column that comes first in the upload, so the choice never
+    depends on the order mappings are stored in. ``key`` folds field names
+    that must not repeat in an export (cBioPortal attribute ids).
     """
     position = {column: i for i, column in enumerate(columns)}
     best: dict[str, tuple[tuple[bool, bool, float, int], str, str]] = {}
@@ -248,9 +267,44 @@ def _select_sources(
     return {field_key: (raw, target) for field_key, (_rank, raw, target) in best.items()}
 
 
+def _field_sources(
+    mappings: list[dict[str, Any]],
+    columns: Sequence[str],
+    key: Callable[[str], str] | None = None,
+) -> dict[str, tuple[str, list[str]]]:
+    """The columns that fill each schema field: ``{field key: (field, columns)}``.
+
+    Every column mapped to a field fills it, in upload order, and exports merge
+    their values (see :func:`_join_values`). An identifier field takes only
+    the column :func:`_select_sources` ranks first.
+    """
+    position = {column: i for i, column in enumerate(columns)}
+    members: dict[str, set[str]] = {}
+    for m in mappings:
+        raw, target = m.get("raw_column"), mapping_target(m)
+        if raw in position and target:
+            members.setdefault(key(target) if key else target, set()).add(raw)
+    fields: dict[str, tuple[str, list[str]]] = {}
+    for field_key, (first, target) in _select_sources(mappings, columns, key).items():
+        if _cbio_id(target) in _ID_FIELDS:
+            fields[field_key] = (target, [first])
+        else:
+            fields[field_key] = (target, sorted(members[field_key], key=position.__getitem__))
+    return fields
+
+
+def _join_values(values: Iterable[Any]) -> str:
+    """Distinct values, in order, separated by :data:`MULTI_VALUE_DELIMITER`."""
+    return MULTI_VALUE_DELIMITER.join(dict.fromkeys(str(value) for value in values))
+
+
+def _has_value(value: Any) -> bool:
+    return not pd.isna(value) and str(value).strip() != ""
+
+
 # Harmonized CSV
 
-ColumnAction = Literal["renamed", "matched", "kept", "dropped"]
+ColumnAction = Literal["renamed", "matched", "merged", "kept", "dropped"]
 MappingStatus = Literal["accepted", "pending", "rejected", "unmapped"]
 DropReason = Literal["no_target", "duplicate_target", "name_conflict"]
 
@@ -261,7 +315,7 @@ class ColumnPlan:
 
     source: str
     target: str | None  # export column name; None when the column is dropped
-    action: ColumnAction
+    action: ColumnAction  # merged: one of several columns combined into ``target``
     mapping_status: MappingStatus
     drop_reason: DropReason | None = None
     # For a dropped column, the source column that took its export name.
@@ -276,6 +330,9 @@ class HarmonizedTable:
     plan: list[ColumnPlan]  # one entry per source column, in source order
     rewritten: pd.DataFrame  # True where a cell was rewritten to its ontology term
     escaped: pd.DataFrame  # True where a cell was escaped against formula injection
+    # The uploaded text each cell comes from: its column's cell, or for a merged
+    # column its columns' values merged without ontology rewrites.
+    original: pd.DataFrame
 
     def to_csv(self) -> str:
         return self.frame.to_csv(index=False)
@@ -300,8 +357,9 @@ def harmonize_table(
     value_rewrites: dict[str, dict[str, str]],
 ) -> HarmonizedTable:
     """Build the harmonized table: rename raw columns to their accepted/curated
-    mappings, drop unmapped columns, rewrite accepted cell values to their
-    confirmed ontology terms (U5), and escape formula-like strings.
+    mappings, merge columns mapped to the same field, drop unmapped columns,
+    rewrite accepted cell values to their confirmed ontology terms (U5), and
+    escape formula-like strings.
 
     ``raw_text`` holds the upload's original cell text and ``raw_df`` the same
     file read with type inference. Output cells keep the original text unless
@@ -309,64 +367,62 @@ def harmonize_table(
     reformatted. A value's ontology row is found by its inferred or its
     original spelling (see :func:`_term`).
     """
-    # One source column per schema field (see _select_sources): a CSV or
-    # cBioPortal file can't carry duplicate column names, and the losers are
-    # near-duplicate suggestions anyway.
-    winners = _select_sources(mappings, list(raw_df.columns))
-    rename_map: dict[str, str] = {raw: target for raw, target in winners.values()}
-    source_of_target = {target: raw for raw, target in winners.values()}
+    # Columns mapped to one field are merged into it (see _field_sources); an
+    # identifier field keeps one column.
+    fields = _field_sources(mappings, list(raw_df.columns))
+    sources_of = {target: sources for target, sources in fields.values()}
+    target_of = {raw: target for target, sources in fields.values() for raw in sources}
     proposed = {
         m["raw_column"]: target
         for m in mappings
         if m["raw_column"] in raw_df.columns and (target := mapping_target(m))
     }
-    mapped_targets = set(rename_map.values())
     status_by_raw = {m["raw_column"]: m["status"] for m in mappings}
     rejected_raw = {
         m["raw_column"]
         for m in mappings
         if m.get("status") == "rejected"
         and m.get("raw_column") in raw_df.columns
-        and m.get("raw_column") not in mapped_targets
+        and m.get("raw_column") not in sources_of
     }
 
     plan: list[ColumnPlan] = []
     columns: dict[str, pd.Series] = {}
     rewritten: dict[str, pd.Series] = {}
     escaped: dict[str, pd.Series] = {}
+    original: dict[str, pd.Series] = {}
     # Preserve original column order for a stable, diff-friendly output.
     for raw in raw_df.columns:
         status = status_by_raw.get(raw, "unmapped")
         if status not in ("accepted", "pending", "rejected"):
             status = "unmapped"
-        if raw in rename_map:
-            target = rename_map[raw]
-            action: ColumnAction = "matched" if target == raw else "renamed"
+        if raw in target_of:
+            target = target_of[raw]
+            action: ColumnAction
+            if len(sources_of[target]) > 1:
+                action = "merged"
+            else:
+                action = "matched" if target == raw else "renamed"
         elif raw in rejected_raw:
             target, action = raw, "kept"
         else:
             if raw in proposed:
                 reason: DropReason = "duplicate_target"
-                winner = source_of_target.get(proposed[raw])
+                winner = sources_of[proposed[raw]][0]
             elif status == "rejected":
-                reason, winner = "name_conflict", source_of_target.get(raw)
+                reason, winner = "name_conflict", sources_of.get(raw, [None])[0]
             else:
                 reason, winner = "no_target", None
             plan.append(ColumnPlan(raw, None, "dropped", status, reason, winner))
             continue
         plan.append(ColumnPlan(raw, target, action, status))
+        if target in columns:
+            continue  # a merged column is built with its first source
 
-        text = raw_text[raw]
-        hit = pd.Series(False, index=text.index)
         # Rewrites belong to a field mapping: a kept (rejected) column is
         # exported as uploaded, even if terms for a field of the same name exist.
         lookup = value_rewrites.get(target) if action != "kept" else None
-        if lookup:
-            # Value-level rewrite (U5): replace accepted raw values with their
-            # confirmed ontology term. Unmatched values pass through.
-            terms = _terms(lookup, raw_df[raw], text)
-            hit = terms.notna()
-            text = text.where(~hit, terms)
+        text, hit, uploaded = _column_text(raw_text, raw_df, sources_of.get(target, [raw]), lookup)
         # Neutralize spreadsheet formula-injection in this human-facing CSV.
         # (The cBioPortal TSVs are machine-read by the importer, so they are
         # not escaped.)
@@ -374,6 +430,7 @@ def harmonize_table(
         columns[target] = guarded
         rewritten[target] = hit
         escaped[target] = guarded != text
+        original[target] = uploaded
 
     index = raw_text.index
     return HarmonizedTable(
@@ -381,6 +438,64 @@ def harmonize_table(
         plan=plan,
         rewritten=pd.DataFrame(rewritten, index=index, dtype=bool),
         escaped=pd.DataFrame(escaped, index=index, dtype=bool),
+        original=pd.DataFrame(original, index=index, dtype=object),
+    )
+
+
+def _column_text(
+    raw_text: pd.DataFrame,
+    raw_df: pd.DataFrame,
+    sources: list[str],
+    lookup: Mapping[str, str] | None,
+) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """An export column's text, where it holds a confirmed term, and the
+    uploaded text it comes from.
+
+    Value-level rewrite (U5): accepted raw values become their confirmed
+    ontology term; unmatched values pass through. Several sources are merged
+    per row: the distinct values of the columns with one, in upload order,
+    each rewritten, joined by :data:`MULTI_VALUE_DELIMITER`. A row with no
+    value in any of them keeps the first column's text (blank, or a marker
+    such as ``NA``).
+    """
+    texts, outputs, hits = [], [], []
+    for source in sources:
+        text = raw_text[source]
+        hit = pd.Series(False, index=text.index)
+        output = text
+        if lookup:
+            terms = _terms(lookup, raw_df[source], text)
+            hit = terms.notna()
+            output = text.where(~hit, terms)
+        texts.append(text)
+        outputs.append(output)
+        hits.append(hit)
+    if len(sources) == 1:
+        return outputs[0], hits[0], texts[0]
+
+    filled = [
+        [typed and _has_value(text) for typed, text in zip(raw_df[s].notna(), raw_text[s])]
+        for s in sources
+    ]
+    text_cells = [t.tolist() for t in texts]
+    output_cells = [o.tolist() for o in outputs]
+    hit_cells = [h.tolist() for h in hits]
+    merged, rewritten, uploaded = [], [], []
+    for i in range(len(raw_text.index)):
+        present = [k for k in range(len(sources)) if filled[k][i]]
+        if not present:
+            merged.append(text_cells[0][i])
+            uploaded.append(text_cells[0][i])
+            rewritten.append(False)
+            continue
+        merged.append(_join_values(output_cells[k][i] for k in present))
+        uploaded.append(_join_values(text_cells[k][i] for k in present))
+        rewritten.append(any(hit_cells[k][i] for k in present))
+    index = raw_text.index
+    return (
+        pd.Series(merged, index=index, dtype=object),
+        pd.Series(rewritten, index=index, dtype=bool),
+        pd.Series(uploaded, index=index, dtype=object),
     )
 
 
@@ -511,8 +626,9 @@ def _clinical_column_specs(
     """Build cBioPortal column specs, in upload order, for the columns chosen to
     fill a schema field — the same choice as the Harmonized CSV.
 
-    Excludes PATIENT_ID / SAMPLE_ID (injected per-file by the caller) and
-    checklist-banned columns, which can't fill an attribute.
+    ``sources`` lists every column merged into an attribute (``raw`` is the
+    first). Excludes PATIENT_ID / SAMPLE_ID (injected per-file by the caller)
+    and checklist-banned columns, which can't fill an attribute.
     """
     allowed = [
         m
@@ -520,19 +636,25 @@ def _clinical_column_specs(
         if not (target := mapping_target(m))
         or not _is_banned(_cbio_id(target), str(m.get("raw_column", "")))
     ]
-    winners = _select_sources(allowed, list(raw_df.columns), key=_cbio_id)
+    fields = _field_sources(allowed, list(raw_df.columns), key=_cbio_id)
     position = {column: i for i, column in enumerate(raw_df.columns)}
     cols: list[dict[str, Any]] = []
-    for target_id, (raw, target) in sorted(winners.items(), key=lambda w: position[w[1][0]]):
+    for target_id, (target, sources) in sorted(
+        fields.items(), key=lambda field: position[field[1][1][0]]
+    ):
         if target_id in {"PATIENT_ID", "SAMPLE_ID"}:
             continue
+        # Merged columns of different types are text; the writer also falls
+        # back to STRING when merged cells aren't numbers or yes/no values.
+        dtypes = {_infer_dtype(raw_df[source]) for source in sources}
         cols.append(
             {
-                "raw": raw,
+                "raw": sources[0],
+                "sources": sources,
                 "target": target_id,
                 "display": target.replace("_", " ").title(),
                 "description": target.replace("_", " ").capitalize(),
-                "dtype": "STRING" if target_id in _STRING_ATTRS else _infer_dtype(raw_df[raw]),
+                "dtype": "STRING" if target_id in _STRING_ATTRS or len(dtypes) > 1 else dtypes.pop(),
                 "priority": 10 if target_id in _HIGH_PRIORITY_ATTRS else 1,
             }
         )
@@ -579,7 +701,8 @@ def _write_clinical_tsv(
     ``raw_text`` is the upload's original cell text (indexed like the full
     file), so a cell that isn't rewritten keeps its uploaded text: sample
     ``0012`` stays ``0012``, as in the Harmonized CSV. Missing values are
-    written empty.
+    written empty. A spec with several ``sources`` gets their distinct values,
+    in order, joined by :data:`MULTI_VALUE_DELIMITER`.
     """
     rewrites = value_rewrites or {}
     targets = {c["target"] for c in cols}
@@ -589,28 +712,36 @@ def _write_clinical_tsv(
         if c["target"].endswith("_STATUS") and f"{c['target'][:-7]}_MONTHS" in targets
     }
     text_df = (raw_text if raw_text is not None else _text_view(raw_df)).loc[raw_df.index]
-    sources = {c["raw"] for c in cols if c["raw"] in raw_df.columns}
+    sources_of = [c.get("sources") or [c["raw"]] for c in cols]
+    sources = {src for srcs in sources_of for src in srcs if src in raw_df.columns}
     typed_cells = {src: raw_df[src].tolist() for src in sources}
     text_cells = {src: text_df[src].tolist() for src in sources}
+
+    def cell_text(src: str, i: int) -> str:
+        value = typed_cells[src][i] if src in sources else None
+        return "" if value is None or pd.isna(value) else str(text_cells[src][i])
 
     rows: list[list[str]] = []
     for i in range(len(raw_df)):
         out_row: list[str] = []
-        for c in cols:
-            src, target_id = c["raw"], c["target"]
-            value = typed_cells[src][i] if src in sources else None
-            text = "" if value is None or pd.isna(value) else str(text_cells[src][i])
+        for c, srcs in zip(cols, sources_of):
+            target_id = c["target"]
             if target_id in ("PATIENT_ID", "SAMPLE_ID"):
-                out_row.append(_sanitize_id(text))
-            elif target_id in survival_status_with_months:
-                out_row.append(_tsv_cell(_normalize_survival(text)))
-            elif not text:
-                out_row.append("")
-            else:
+                out_row.append(_sanitize_id(cell_text(srcs[0], i)))
+                continue
+            lookup = rewrites.get(target_id)
+            parts: list[str] = []
+            for src in srcs:
+                text = cell_text(src, i)
+                if not text:
+                    continue
+                if target_id in survival_status_with_months:
+                    parts.append(_normalize_survival(text))
+                    continue
                 # Apply the curator-confirmed value rewrite (U5).
-                lookup = rewrites.get(target_id)
-                term = _term(lookup, str(value), text) if lookup else None
-                out_row.append(_tsv_cell(term if term is not None else text))
+                term = _term(lookup, str(typed_cells[src][i]), text) if lookup else None
+                parts.append(term if term is not None else text)
+            out_row.append(_tsv_cell(_join_values(parts)) if parts else "")
         rows.append(out_row)
 
     # cBioPortal accepts only TRUE / FALSE in a BOOLEAN attribute: write yes/no
@@ -694,11 +825,11 @@ async def export_cbioportal(
 
     patient_src = _id_raw_source(
         mappings, raw_df, "PATIENT_ID",
-        ["subject_id", "patient_id", "participant_id", "case_id"],
+        PATIENT_ID_CANDIDATES,
     )
     sample_src = _id_raw_source(
         mappings, raw_df, "SAMPLE_ID",
-        ["sample_id", "run_id", "sampleid", "accession"],
+        SAMPLE_ID_CANDIDATES,
     )
 
     if not specs and raw_df.columns.empty:
@@ -821,11 +952,11 @@ async def export_cbioportal_study(
 
     patient_src = _id_raw_source(
         mappings, raw_df, "PATIENT_ID",
-        ["subject_id", "patient_id", "participant_id", "case_id"],
+        PATIENT_ID_CANDIDATES,
     )
     sample_src = _id_raw_source(
         mappings, raw_df, "SAMPLE_ID",
-        ["sample_id", "run_id", "sampleid", "accession"],
+        SAMPLE_ID_CANDIDATES,
     )
 
     patient_id_spec = _id_spec(

@@ -64,7 +64,7 @@ def test_clinical_column_specs_excludes_ids_and_banned_and_dedupes():
         {"raw_column": "samp", "matched_field": "SAMPLE_ID", "status": "accepted"},
         {"raw_column": "gender", "matched_field": "SEX", "status": "accepted"},
         {"raw_column": "tissue", "matched_field": "BODY_SITE", "status": "accepted"},
-        # Duplicate target BODY_SITE — must be dropped.
+        # Merged into the one BODY_SITE attribute, in upload order.
         {"raw_column": "tissue2", "matched_field": "BODY_SITE", "status": "accepted"},
         # Banned auto-populated attribute.
         {"raw_column": "mut", "matched_field": "MUTATION_COUNT", "status": "accepted"},
@@ -77,7 +77,49 @@ def test_clinical_column_specs_excludes_ids_and_banned_and_dedupes():
     assert "SAMPLE_ID" not in targets
     assert "MUTATION_COUNT" not in targets
     assert targets.count("BODY_SITE") == 1
+    assert next(s for s in specs if s["target"] == "BODY_SITE")["sources"] == ["tissue", "tissue2"]
     assert "SEX" in targets
+
+
+def test_merged_attributes_join_values_and_fall_back_to_string():
+    raw_df, raw_text = _frames(
+        "patient,sample,stage,stage2,count,count2,ffpe,ffpe_code\n"
+        "P1,S1,II,IIb,3,3,yes,1\n"
+        "P2,S2,,III,,7,no,0\n"
+        "P3,S3,IV,,5,8,,1\n"
+    )
+    mappings = [
+        {"raw_column": "patient", "matched_field": "PATIENT_ID", "status": "accepted"},
+        {"raw_column": "sample", "matched_field": "SAMPLE_ID", "status": "accepted"},
+        {"raw_column": "stage", "matched_field": "tumor_stage", "status": "accepted"},
+        {"raw_column": "stage2", "matched_field": "tumor_stage", "status": "pending"},
+        {"raw_column": "count", "matched_field": "visits", "status": "accepted"},
+        {"raw_column": "count2", "matched_field": "visits", "status": "accepted"},
+        {"raw_column": "ffpe", "matched_field": "ffpe", "status": "accepted"},
+        {"raw_column": "ffpe_code", "matched_field": "ffpe", "status": "accepted"},
+    ]
+    specs = exporter._clinical_column_specs(mappings, raw_df)
+    assert [(s["target"], s["sources"], s["dtype"]) for s in specs] == [
+        ("TUMOR_STAGE", ["stage", "stage2"], "STRING"),
+        ("VISITS", ["count", "count2"], "NUMBER"),
+        # yes/no merged with numbers is text: "1" must not become TRUE.
+        ("FFPE", ["ffpe", "ffpe_code"], "STRING"),
+    ]
+    cols = [
+        exporter._id_spec("PATIENT_ID", "patient", "Patient Identifier", "Unique patient identifier"),
+        exporter._id_spec("SAMPLE_ID", "sample", "Sample Identifier", "Unique sample identifier"),
+        *specs,
+    ]
+
+    lines = exporter._write_clinical_tsv(cols, raw_df, {}, raw_text).rstrip("\n").split("\n")
+
+    # Two numbers in one cell are no longer a NUMBER, so the attribute is declared STRING.
+    assert lines[2].split("\t") == ["#STRING", "STRING", "STRING", "STRING", "STRING"]
+    assert [line.split("\t") for line in lines[5:]] == [
+        ["P1", "S1", "II<;>IIb", "3", "yes<;>1"],
+        ["P2", "S2", "III", "7", "no<;>0"],
+        ["P3", "S3", "IV", "5<;>8", "1"],
+    ]
 
 
 def test_write_clinical_tsv_header_and_values():

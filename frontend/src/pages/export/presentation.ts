@@ -2,6 +2,9 @@ import type { ExportCellChange, ExportChangeReason, ExportColumnChange, ExportPr
 
 export const PAGE_SIZE = 50;
 
+/** Separates the values of columns merged into one (see the backend exporter). */
+export const MULTI_VALUE_DELIMITER = '<;>';
+
 export const REASON_META: Record<ExportChangeReason, { label: string; hint: string }> = {
   ontology: { label: 'Ontology term', hint: 'Rewritten to its confirmed ontology term.' },
   escaped: {
@@ -53,20 +56,36 @@ export function selectionLabel(selected: readonly string[] | null, total: number
 }
 
 /** How an export column differs from the upload, for the column picker. */
-export function describeColumnChange(renamedFrom: string | undefined, changedCells: number): string {
+export function describeColumnChange(
+  renamedFrom: string | undefined,
+  changedCells: number,
+  mergedFrom: readonly string[] = [],
+): string {
   const parts = [
     ...(renamedFrom ? [`renamed from ${renamedFrom}`] : []),
+    ...(mergedFrom.length > 0 ? [`merged from ${mergedFrom.join(', ')}`] : []),
     ...(changedCells > 0 ? [`${pluralize(changedCells, 'value')} changed`] : []),
   ];
   return parts.length > 0 ? parts.join(' · ') : 'unchanged';
 }
 
-/** Export columns that differ from the upload: renamed by their mapping, or
- *  holding at least one changed value. */
+/** The summary's column hint: merges and columns left out, if any. */
+export function columnsHint(merged: number, mergedInto: number, dropped: number): string {
+  const parts = [
+    ...(merged > 0 ? [`${merged.toLocaleString()} merged into ${pluralize(mergedInto, 'column')}`] : []),
+    ...(dropped > 0 ? [`${dropped.toLocaleString()} not exported`] : []),
+  ];
+  return parts.length > 0 ? parts.join(' · ') : 'Every column is exported';
+}
+
+/** Export columns that differ from the upload: renamed or merged by their
+ *  mapping, or holding at least one changed value. */
 export function changedColumnNames(columns: ExportColumnChange[]): Set<string> {
   const names = new Set<string>();
   for (const column of columns) {
-    if (column.target && (column.action === 'renamed' || column.changed_cells > 0)) names.add(column.target);
+    if (column.target && (column.action === 'renamed' || column.action === 'merged' || column.changed_cells > 0)) {
+      names.add(column.target);
+    }
   }
   return names;
 }
@@ -75,16 +94,25 @@ export function changedColumnNames(columns: ExportColumnChange[]): Set<string> {
 export function renamedFrom(columns: ExportColumnChange[]): Record<string, string> {
   const sources: Record<string, string> = {};
   for (const column of columns) {
-    if (column.target && column.target !== column.source) sources[column.target] = column.source;
+    if (column.target && column.action === 'renamed') sources[column.target] = column.source;
   }
   return sources;
 }
 
-/** Changed-cell counts keyed by export column name. */
+/** Export column → the uploaded columns merged into it, in upload order. */
+export function mergedFrom(columns: ExportColumnChange[]): Record<string, string[]> {
+  const sources: Record<string, string[]> = {};
+  for (const column of columns) {
+    if (column.target && column.action === 'merged') (sources[column.target] ??= []).push(column.source);
+  }
+  return sources;
+}
+
+/** Changed-cell counts keyed by export column name (a merged column's on its first source). */
 export function changedCellsByTarget(columns: ExportColumnChange[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const column of columns) {
-    if (column.target) counts[column.target] = column.changed_cells;
+    if (column.target) counts[column.target] = (counts[column.target] ?? 0) + column.changed_cells;
   }
   return counts;
 }

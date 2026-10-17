@@ -279,6 +279,7 @@ function demoExportPreview(params: URLSearchParams): ExportPreview {
             columns_after: outputs.length,
             renamed: count('renamed'),
             matched: count('matched'),
+            merged: count('merged'),
             kept: count('kept'),
             dropped: count('dropped'),
             pending: outputs.filter((c) => c.mapping_status === 'pending').length,

@@ -5,7 +5,7 @@ import type { ExportPreviewQuery } from '../../api/types';
 import { EmptyState, Skeleton } from '../../components/ui/Feedback';
 import { useExportPreview } from '../../hooks/queries';
 import { ChangedValuesGrid } from './ChangedValuesGrid';
-import { PAGE_SIZE } from './presentation';
+import { PAGE_SIZE, mergedFrom } from './presentation';
 import { PreviewSummary } from './PreviewSummary';
 import { useExportDownload } from './useExportDownload';
 
@@ -54,6 +54,7 @@ export function ChangePreview({ studyId }: { studyId: string }) {
       <PreviewSummary
         studyId={studyId}
         summary={summary}
+        mergedInto={Object.keys(mergedFrom(columns)).length}
         downloading={downloading === 'harmonized'}
         onDownload={() => run('harmonized', () => downloadExport(studyId, 'harmonized'))}
       />

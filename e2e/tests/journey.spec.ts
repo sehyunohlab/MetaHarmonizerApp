@@ -162,7 +162,7 @@ test.describe('authenticated journey', () => {
       const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       for (const name of body.rows.columns as string[]) {
         await expect(
-          grid.getByRole('columnheader', { name: new RegExp(`^${escape(name)}(\\s*, renamed from .+)?$`) }),
+          grid.getByRole('columnheader', { name: new RegExp(`^${escape(name)}(\\s*, (renamed|merged) from .+)?$`) }),
         ).toBeVisible();
       }
       await expect(grid.getByRole('rowheader')).toHaveCount(body.rows.total);

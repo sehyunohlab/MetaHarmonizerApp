@@ -51,11 +51,11 @@ def _patch_repos(monkeypatch, mappings, study, ontology=()):
 def _sample_study_zip(monkeypatch) -> bytes:
     # Read like the export endpoints read an upload: type-inferred and as text.
     upload = (
-        "subject,samp,gender,os_status,os_months,sample_type,ffpe,smoker,note,grade,alt\n"
-        'p1,0012,Male,LIVING,10.5,Primary,yes,TRUE,"two\nlines",1,101\n'
-        'p1,0013,Male,LIVING,10.5,Metastasis,No,FALSE,"say ""hi""",2,102\n'
-        "p2,0014,Female,DECEASED,22.0,Primary,no,,plain,,103\n"
-        "p3,0015,Male,LIVING,5.0,Primary,YES,TRUE,,1,104\n"
+        "subject,samp,gender,os_status,os_months,sample_type,ffpe,smoker,note,grade,alt,dx,dx_detail\n"
+        'p1,0012,Male,LIVING,10.5,Primary,yes,TRUE,"two\nlines",1,101,Lung Cancer,Adenocarcinoma; NOS\n'
+        'p1,0013,Male,LIVING,10.5,Metastasis,No,FALSE,"say ""hi""",2,102,Lung Cancer,Lung Cancer\n'
+        "p2,0014,Female,DECEASED,22.0,Primary,no,,plain,,103,,Melanoma\n"
+        "p3,0015,Male,LIVING,5.0,Primary,YES,TRUE,,1,104,,\n"
     )
     raw_df = pd.read_csv(io.StringIO(upload), low_memory=False)
     raw_text = pd.read_csv(io.StringIO(upload), dtype=str, keep_default_na=False)
@@ -77,6 +77,9 @@ def _sample_study_zip(monkeypatch) -> bytes:
         {"raw_column": "grade", "matched_field": "TUMOR_GRADE", "status": "accepted"},
         # cBioPortal requires its predefined OTHER_SAMPLE_ID to be STRING.
         {"raw_column": "alt", "matched_field": "OTHER_SAMPLE_ID", "status": "accepted"},
+        # Two columns mapped to one attribute are merged into it.
+        {"raw_column": "dx", "matched_field": "DIAGNOSIS", "status": "accepted"},
+        {"raw_column": "dx_detail", "matched_field": "DIAGNOSIS", "status": "pending"},
     ]
     # The pipeline keys a term by the inferred value ("1.0"); a re-map after a
     # schema edit by the uploaded text ("2").
@@ -111,6 +114,15 @@ def test_generated_study_passes_validate_data(monkeypatch, tmp_path):
     assert lines[2].split("\t")[j] == "STRING"
     assert [line.split("\t")[j] for line in lines[5:]] == ["G1", "G2", "", "G1"]
     assert lines[2].split("\t")[lines[4].split("\t").index("OTHER_SAMPLE_ID")] == "STRING"
+    # Merged values: each row's distinct values, in column order, joined by "<;>".
+    j = lines[4].split("\t").index("DIAGNOSIS")
+    assert lines[2].split("\t")[j] == "STRING"
+    assert [line.split("\t")[j] for line in lines[5:]] == [
+        "Lung Cancer<;>Adenocarcinoma; NOS",
+        "Lung Cancer",
+        "Melanoma",
+        "",
+    ]
 
     # Offline validation (-n / --no_portal_checks): structural + format checks
     # without a running cBioPortal instance.
