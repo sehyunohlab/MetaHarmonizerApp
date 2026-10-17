@@ -93,6 +93,9 @@ versioning once a stable `1.x` release is declared.
   requirement in the middle of its marker, so pip rejected the wheel built from
   upstream `9c7f100` on Oct 9. Only the NLTK line is removed now; every other
   byte is kept.
+- The export preview no longer has a **Column changes** table, and its grid of
+  exported values is now called **Harmonized metadata**. The summary still
+  counts the columns left out of the export.
 
 ## [0.1.0] - 2026-08-19
 

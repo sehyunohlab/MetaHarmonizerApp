@@ -1,11 +1,10 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { AlertTriangle, RotateCcw } from 'lucide-react';
 import { downloadExport } from '../../api/client';
 import type { ExportPreviewQuery } from '../../api/types';
 import { EmptyState, Skeleton } from '../../components/ui/Feedback';
 import { useExportPreview } from '../../hooks/queries';
 import { ChangedValuesGrid } from './ChangedValuesGrid';
-import { ColumnChangesCard } from './ColumnChangesCard';
 import { PAGE_SIZE } from './presentation';
 import { PreviewSummary } from './PreviewSummary';
 import { useExportDownload } from './useExportDownload';
@@ -13,12 +12,11 @@ import { useExportDownload } from './useExportDownload';
 // Everything by default (changes are highlighted); focusing a column narrows to its changes.
 const INITIAL_QUERY: ExportPreviewQuery = { offset: 0, limit: PAGE_SIZE, changedOnly: false, column: null };
 
-/** Harmonized CSV vs. original upload: summary, column changes, every exported value. */
+/** Harmonized CSV vs. original upload: a summary, then every harmonized value. */
 export function ChangePreview({ studyId }: { studyId: string }) {
   const [query, setQuery] = useState<ExportPreviewQuery>(INITIAL_QUERY);
   const preview = useExportPreview(studyId, query);
   const { downloading, run } = useExportDownload();
-  const gridRef = useRef<HTMLDivElement>(null);
 
   if (preview.isPending) {
     return (
@@ -28,7 +26,6 @@ export function ChangePreview({ studyId }: { studyId: string }) {
             <Skeleton key={key} className="h-24 rounded-2xl" />
           ))}
         </div>
-        <Skeleton className="h-72 rounded-2xl" />
         <Skeleton className="h-96 rounded-2xl" />
       </div>
     );
@@ -51,10 +48,6 @@ export function ChangePreview({ studyId }: { studyId: string }) {
   }
 
   const { summary, columns, rows } = preview.data;
-  const showRowsFor = (target: string) => {
-    setQuery({ ...query, offset: 0, changedOnly: true, column: target });
-    gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
 
   return (
     <div className="space-y-6">
@@ -64,17 +57,14 @@ export function ChangePreview({ studyId }: { studyId: string }) {
         downloading={downloading === 'harmonized'}
         onDownload={() => run('harmonized', () => downloadExport(studyId, 'harmonized'))}
       />
-      <ColumnChangesCard columns={columns} onShowRows={showRowsFor} />
-      <div ref={gridRef} className="scroll-mt-24">
-        <ChangedValuesGrid
-          rows={rows}
-          columns={columns}
-          changedRows={summary.changed_rows}
-          query={query}
-          fetching={preview.isFetching}
-          onQueryChange={setQuery}
-        />
-      </div>
+      <ChangedValuesGrid
+        rows={rows}
+        columns={columns}
+        changedRows={summary.changed_rows}
+        query={query}
+        fetching={preview.isFetching}
+        onQueryChange={setQuery}
+      />
     </div>
   );
 }

@@ -218,25 +218,18 @@ export anything or mark the study as exported.
 - The summary shows the row count (rows are never added, removed, or
   reordered), how many columns are exported, renamed, or left out, and how many
   cell values change.
-- **Column changes** lists every uploaded column with its export name, its
-  mapping decision, and why a column is not exported. Select a column's changed
-  count to see each distinct value change, such as `F → female`. Every ontology
-  term change is listed; only spreadsheet-safe escapes beyond the first 25 per
-  column are counted instead of listed.
-- A column is **Not exported** (left out of the Harmonized CSV) when it is not
-  mapped to a schema field, or when another column already maps to the same
-  field. A CSV cannot repeat a column name, so one column per field is kept: a
-  mapping you accepted or edited wins over one the engine accepted on its own,
-  which wins over an unreviewed suggestion; then higher confidence; then the
-  column that comes first in your file. The cBioPortal files use the same
-  column. The preview names the column that was kept, for example
-  `Gender already maps to sex`. To export the other column instead, reject or
-  edit one of the two mappings.
+- A column is left out of the Harmonized CSV, and counted as not exported in
+  the summary, when it is not mapped to a schema field, or when another column
+  already maps to the same field. A CSV cannot repeat a column name, so one
+  column per field is kept: a mapping you accepted or edited wins over one the
+  engine accepted on its own, which wins over an unreviewed suggestion; then
+  higher confidence; then the column that comes first in your file. The
+  cBioPortal files use the same column. To export the other column instead,
+  reject or edit one of the two mappings.
 - A column whose mapping you **rejected** is never used for a schema field. The
-  Harmonized CSV keeps it unchanged under its own name (**Kept as uploaded**),
-  unless a mapped column is already exported under that name. The cBioPortal
-  files leave it out.
-- **Exported values** lists every row and every exported column of the
+  Harmonized CSV keeps it unchanged under its own name, unless a mapped column
+  is already exported under that name. The cBioPortal files leave it out.
+- **Harmonized metadata** lists every row and every exported column of the
   Harmonized CSV. A renamed column's header is highlighted, with its uploaded
   name struck through beneath the schema field name. Changed cells show the
   exported value with the uploaded value struck through beneath it, colored by
