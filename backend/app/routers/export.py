@@ -124,15 +124,16 @@ async def export_preview(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     changed_only: bool = False,
-    column: str | None = None,
+    column: list[str] | None = Query(None),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Compare the harmonized CSV with the original upload, cell by cell.
 
     Read-only: the study is not marked exported. ``changed_only`` keeps rows
-    with at least one changed cell (in ``column`` when given); ``offset`` and
-    ``limit`` page through them.
+    with at least one changed cell; repeat ``column`` to consider only those
+    export columns (``rows.changed_total`` counts the rows changed in them).
+    ``offset`` and ``limit`` page through the kept rows.
     """
     raw_df, raw_text = await _load_raw_frames(
         db, study_id, user, mark_export=False, with_text=True
@@ -146,7 +147,7 @@ async def export_preview(
             offset=offset,
             limit=limit,
             changed_only=changed_only,
-            column=column,
+            columns=column,
         )
     except UnknownColumnError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -234,6 +234,7 @@ def test_preview_rows_page_and_filters():
     page = build_preview("s1", text, table, offset=1, limit=2)["rows"]
     assert page["columns"] == ["sample_id", "sex", "body_site", "comment"]
     assert page["total"] == 4 and [r["line"] for r in page["items"]] == [2, 3]
+    assert page["changed_total"] == 4
     second = page["items"][0]
     assert second["values"] == ["2", "Male", "feces", "'=1+1"]
     assert second["changes"] == [
@@ -242,17 +243,40 @@ def test_preview_rows_page_and_filters():
         {"column": 3, "before": "=1+1", "reason": "escaped"},
     ]
 
-    only_comment = build_preview("s1", text, table, changed_only=True, column="comment")["rows"]
+    only_comment = build_preview("s1", text, table, changed_only=True, columns=["comment"])["rows"]
     assert only_comment["total"] == 1 and only_comment["items"][0]["line"] == 2
+    assert only_comment["changed_total"] == 1
 
-    everything = build_preview("s1", text, table, column="comment")["rows"]
-    assert everything["total"] == 4
+    everything = build_preview("s1", text, table, columns=["comment"])["rows"]
+    assert everything["total"] == 4 and everything["changed_total"] == 1
+
+
+def test_preview_filters_rows_changed_in_any_chosen_column():
+    text, typed = _frames("id,a,b,c\n1,x,p,k\n2,y,q,k\n3,x,q,k\n4,z,p,k\n")
+    mappings = [_m("id", "sample_id"), _m("a", "alpha"), _m("b", "beta"), _m("c", "gamma")]
+    table = harmonize_table(text, typed, mappings, {"alpha": {"x": "X"}, "beta": {"q": "Q"}})
+
+    def lines(**kwargs):
+        rows = build_preview("s1", text, table, **kwargs)["rows"]
+        return [r["line"] for r in rows["items"]], rows["changed_total"]
+
+    assert lines(changed_only=True, columns=["alpha"]) == ([1, 3], 2)
+    assert lines(changed_only=True, columns=["beta"]) == ([2, 3], 2)
+    assert lines(changed_only=True, columns=["beta", "alpha"]) == ([1, 2, 3], 3)
+    # A renamed column and an untouched one have no changed values.
+    assert lines(changed_only=True, columns=["sample_id", "gamma"]) == ([], 0)
+    # No scope means every column; without changed_only every row is kept.
+    assert lines(changed_only=True) == ([1, 2, 3], 3)
+    assert lines(columns=["alpha"]) == ([1, 2, 3, 4], 2)
 
 
 def test_preview_rejects_unknown_column():
     text, table = _preview_fixture()
-    with pytest.raises(UnknownColumnError):
-        build_preview("s1", text, table, column="not_exported")
+    with pytest.raises(UnknownColumnError, match="'not_exported' is not a column"):
+        build_preview("s1", text, table, columns=["not_exported"])
+    # Filters use export names: the upload's "note" is exported as "comment".
+    with pytest.raises(UnknownColumnError, match="'note', 'x' are not columns"):
+        build_preview("s1", text, table, columns=["sex", "note", "x"])
 
 
 def test_preview_with_renames_only_has_no_changed_rows():
@@ -267,6 +291,7 @@ def test_preview_with_renames_only_has_no_changed_rows():
     assert [r["values"] for r in preview["rows"]["items"]] == [["x", "1"], ["y", "2"]]
     changed = build_preview("s1", text, table, changed_only=True)["rows"]
     assert changed["total"] == 0 and changed["items"] == []
+    assert changed["changed_total"] == 0
 
 
 def test_preview_when_every_column_is_dropped():
@@ -279,3 +304,4 @@ def test_preview_when_every_column_is_dropped():
     assert preview["summary"]["dropped"] == 2
     assert preview["rows"]["columns"] == []
     assert preview["rows"]["items"] == [{"line": 1, "values": [], "changes": []}]
+    assert preview["rows"]["changed_total"] == 0

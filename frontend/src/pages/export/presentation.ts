@@ -29,19 +29,36 @@ export function changesByColumn(row: ExportPreviewRow): Map<number, ExportCellCh
   return new Map(row.changes.map((change) => [change.column, change]));
 }
 
-/** Indexes of the grid columns to display. A focused column wins; otherwise
- *  optionally only the changed columns (see {@link changedColumnNames}). */
-export function visibleColumnIndexes(
-  columns: string[],
-  changed: ReadonlySet<string>,
-  options: { changedOnly: boolean; focus: string | null },
-): number[] {
-  if (options.focus !== null) {
-    const index = columns.indexOf(options.focus);
-    return index === -1 ? [] : [index];
-  }
-  const all = columns.map((_, index) => index);
-  return options.changedOnly ? all.filter((index) => changed.has(columns[index])) : all;
+/** Indexes of the grid columns to display: every column when ``selected`` is
+ *  null, otherwise the chosen ones in export order. */
+export function visibleColumnIndexes(columns: string[], selected: readonly string[] | null): number[] {
+  if (selected === null) return columns.map((_, index) => index);
+  const chosen = new Set(selected);
+  return columns.flatMap((name, index) => (chosen.has(name) ? [index] : []));
+}
+
+/** A column choice in export order, or null when it covers every column. */
+export function normalizeSelection(columns: string[], picked: Iterable<string>): string[] | null {
+  const chosen = new Set(picked);
+  const ordered = columns.filter((name) => chosen.has(name));
+  return ordered.length === columns.length ? null : ordered;
+}
+
+/** What the column picker shows: "All", "None", the one column, or "3 of 21". */
+export function selectionLabel(selected: readonly string[] | null, total: number): string {
+  if (selected === null || (total > 0 && selected.length >= total)) return 'All';
+  if (selected.length === 0) return 'None';
+  if (selected.length === 1) return selected[0];
+  return `${selected.length.toLocaleString()} of ${total.toLocaleString()}`;
+}
+
+/** How an export column differs from the upload, for the column picker. */
+export function describeColumnChange(renamedFrom: string | undefined, changedCells: number): string {
+  const parts = [
+    ...(renamedFrom ? [`renamed from ${renamedFrom}`] : []),
+    ...(changedCells > 0 ? [`${pluralize(changedCells, 'value')} changed`] : []),
+  ];
+  return parts.length > 0 ? parts.join(' · ') : 'unchanged';
 }
 
 /** Export columns that differ from the upload: renamed by their mapping, or

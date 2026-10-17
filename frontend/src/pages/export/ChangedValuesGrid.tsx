@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Rows3, X } from 'lucide-react';
 import type {
   ExportChangeReason,
@@ -10,6 +9,7 @@ import { Card, CardHeader } from '../../components/ui/Card';
 import { EmptyState, Spinner } from '../../components/ui/Feedback';
 import { cn } from '../../lib/cn';
 import { CellText } from './CellText';
+import { ColumnPicker } from './ColumnPicker';
 import {
   REASON_META,
   changedCellsByTarget,
@@ -44,31 +44,28 @@ function FilterCount({ value }: { value: number }) {
 export function ChangedValuesGrid({
   rows,
   columns,
-  changedRows,
   query,
   fetching,
   onQueryChange,
 }: {
   rows: ExportPreviewRows;
   columns: ExportColumnChange[];
-  changedRows: number;
   query: ExportPreviewQuery;
   fetching: boolean;
   onQueryChange: (query: ExportPreviewQuery) => void;
 }) {
-  const [changedColumnsOnly, setChangedColumnsOnly] = useState(false);
   const changedCells = changedCellsByTarget(columns);
   const changedColumns = changedColumnNames(columns);
   const sources = renamedFrom(columns);
-  const visible = visibleColumnIndexes(rows.columns, changedColumns, {
-    changedOnly: changedColumnsOnly,
-    focus: query.column,
-  });
-  const changedTargets = rows.columns.filter((name) => (changedCells[name] ?? 0) > 0);
-  const changedColumnCount = rows.columns.filter((name) => changedColumns.has(name)).length;
+  const selection = query.columns;
+  const visible = visibleColumnIndexes(rows.columns, selection);
+  const noneChosen = selection !== null && selection.length === 0;
   const hasOtherChanges = rows.items.some((row) => row.changes.some((change) => change.reason === 'other'));
   const pageEnd = rows.offset + rows.items.length;
   const refine = (patch: Partial<ExportPreviewQuery>) => onQueryChange({ ...query, offset: 0, ...patch });
+  // Hiding columns only re-pages when it also changes which rows are kept.
+  const chooseColumns = (next: string[] | null) =>
+    onQueryChange({ ...query, columns: next, offset: query.changedOnly ? 0 : query.offset });
 
   return (
     <Card>
@@ -80,56 +77,35 @@ export function ChangedValuesGrid({
       />
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3 border-b border-slate-100 px-5 py-3 text-sm dark:border-slate-800">
-        <label className="inline-flex cursor-pointer items-center gap-2 text-slate-700 dark:text-slate-200">
-          <input
-            type="checkbox"
-            className="checkbox"
-            checked={query.changedOnly}
-            onChange={(event) =>
-              refine({ changedOnly: event.target.checked, column: event.target.checked ? query.column : null })
-            }
-          />
-          Changed rows only
-          <FilterCount value={changedRows} />
-        </label>
         <label
-          className={cn(
-            'inline-flex cursor-pointer items-center gap-2 text-slate-700 dark:text-slate-200',
-            query.column !== null && 'cursor-not-allowed opacity-50',
-          )}
-          title="Columns that were renamed or have changed values"
+          className="inline-flex cursor-pointer items-center gap-2 text-slate-700 dark:text-slate-200"
+          title="Rows with a changed value in the shown columns"
         >
           <input
             type="checkbox"
             className="checkbox"
-            checked={changedColumnsOnly}
-            disabled={query.column !== null}
-            onChange={(event) => setChangedColumnsOnly(event.target.checked)}
+            checked={query.changedOnly}
+            onChange={(event) => refine({ changedOnly: event.target.checked })}
           />
-          Changed columns only
-          <FilterCount value={changedColumnCount} />
+          Changed rows only
+          <FilterCount value={noneChosen ? 0 : rows.changed_total} />
         </label>
-        <label className="inline-flex items-center gap-2 text-slate-700 dark:text-slate-200">
-          <span>Values changed in</span>
-          <select
-            value={query.column ?? ''}
-            onChange={(event) => refine({ column: event.target.value || null, changedOnly: true })}
-            className="field w-auto py-1.5 pr-8"
-          >
-            <option value="">Any column</option>
-            {changedTargets.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {query.column !== null && (
-          <button type="button" onClick={() => refine({ column: null })} className="btn-ghost btn-sm">
-            <X className="h-3.5 w-3.5" />
-            Clear focus
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <ColumnPicker
+            columns={rows.columns}
+            selected={selection}
+            changed={changedColumns}
+            renamedFrom={sources}
+            changedCells={changedCells}
+            onChange={chooseColumns}
+          />
+          {selection !== null && (
+            <button type="button" onClick={() => chooseColumns(null)} className="btn-ghost btn-sm">
+              <X className="h-3.5 w-3.5" />
+              Show all columns
+            </button>
+          )}
+        </div>
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400" aria-live="polite">
             {rowRangeLabel(rows.offset, rows.items.length, rows.total)}
@@ -157,39 +133,43 @@ export function ChangedValuesGrid({
         </div>
       </div>
 
-      {rows.total === 0 ? (
+      {rows.columns.length === 0 ? (
         <div className="p-5">
           <EmptyState
             icon={<Rows3 className="h-6 w-6" />}
-            title={query.changedOnly ? 'No changed values' : 'No rows'}
-            description={
-              query.changedOnly
-                ? `Every exported cell${query.column ? ` in ${query.column}` : ''} matches your upload.`
-                : 'This study has no data rows.'
-            }
-            action={
-              query.changedOnly ? (
-                <button
-                  type="button"
-                  className="btn-secondary btn-sm"
-                  onClick={() => refine({ changedOnly: false, column: null })}
-                >
-                  Show all rows
-                </button>
-              ) : undefined
-            }
+            title="No exported columns"
+            description="No uploaded column is mapped to a schema field yet, so the harmonized CSV has no columns."
           />
         </div>
       ) : visible.length === 0 ? (
         <div className="p-5">
           <EmptyState
             icon={<Rows3 className="h-6 w-6" />}
-            title="No changed columns"
-            description="No exported column was renamed or has changed values."
+            title="No columns selected"
+            description="Choose the columns to show from the Columns list."
             action={
-              <button type="button" className="btn-secondary btn-sm" onClick={() => setChangedColumnsOnly(false)}>
+              <button type="button" className="btn-secondary btn-sm" onClick={() => chooseColumns(null)}>
                 Show all columns
               </button>
+            }
+          />
+        </div>
+      ) : rows.total === 0 ? (
+        <div className="p-5">
+          <EmptyState
+            icon={<Rows3 className="h-6 w-6" />}
+            title={query.changedOnly ? 'No changed values' : 'No rows'}
+            description={
+              query.changedOnly
+                ? `Every exported cell${selection ? ' in the shown columns' : ''} matches your upload.`
+                : 'This study has no data rows.'
+            }
+            action={
+              query.changedOnly ? (
+                <button type="button" className="btn-secondary btn-sm" onClick={() => refine({ changedOnly: false })}>
+                  Show all rows
+                </button>
+              ) : undefined
             }
           />
         </div>

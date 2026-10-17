@@ -5,10 +5,13 @@ import {
   changedColumnNames,
   changesByColumn,
   clampOffset,
+  describeColumnChange,
   formatPercent,
+  normalizeSelection,
   pluralize,
   renamedFrom,
   rowRangeLabel,
+  selectionLabel,
   visibleColumnIndexes,
 } from './presentation';
 
@@ -53,16 +56,34 @@ describe('rowRangeLabel', () => {
 
 describe('grid helpers', () => {
   const gridColumns = ['sample_id', 'sex', 'age'];
-  const changed = new Set(['sex', 'age']);
 
-  it('shows a focused column on its own', () => {
-    expect(visibleColumnIndexes(gridColumns, changed, { changedOnly: true, focus: 'age' })).toEqual([2]);
-    expect(visibleColumnIndexes(gridColumns, changed, { changedOnly: false, focus: 'missing' })).toEqual([]);
+  it('shows every column, or the chosen ones in export order', () => {
+    expect(visibleColumnIndexes(gridColumns, null)).toEqual([0, 1, 2]);
+    expect(visibleColumnIndexes(gridColumns, ['age', 'sample_id'])).toEqual([0, 2]);
+    expect(visibleColumnIndexes(gridColumns, ['age', 'missing'])).toEqual([2]);
+    expect(visibleColumnIndexes(gridColumns, [])).toEqual([]);
   });
 
-  it('hides unchanged columns on request', () => {
-    expect(visibleColumnIndexes(gridColumns, changed, { changedOnly: true, focus: null })).toEqual([1, 2]);
-    expect(visibleColumnIndexes(gridColumns, changed, { changedOnly: false, focus: null })).toEqual([0, 1, 2]);
+  it('keeps a column choice in export order, and all of them as no filter', () => {
+    expect(normalizeSelection(gridColumns, ['age', 'sample_id'])).toEqual(['sample_id', 'age']);
+    expect(normalizeSelection(gridColumns, new Set(['sex', 'missing']))).toEqual(['sex']);
+    expect(normalizeSelection(gridColumns, [])).toEqual([]);
+    expect(normalizeSelection(gridColumns, ['age', 'sex', 'sample_id'])).toBeNull();
+  });
+
+  it('labels the column choice', () => {
+    expect(selectionLabel(null, 59)).toBe('All');
+    expect(selectionLabel([], 59)).toBe('None');
+    expect(selectionLabel(['disease'], 59)).toBe('disease');
+    expect(selectionLabel(['disease', 'sex', 'age'], 59)).toBe('3 of 59');
+    expect(selectionLabel(['a', 'b'], 2)).toBe('All');
+  });
+
+  it('describes how each column changed', () => {
+    expect(describeColumnChange('study_name', 0)).toBe('renamed from study_name');
+    expect(describeColumnChange(undefined, 681)).toBe(`${(681).toLocaleString()} values changed`);
+    expect(describeColumnChange('Gender', 1)).toBe('renamed from Gender · 1 value changed');
+    expect(describeColumnChange(undefined, 0)).toBe('unchanged');
   });
 
   it('counts a renamed column as changed even when its values are not', () => {
@@ -76,7 +97,7 @@ describe('grid helpers', () => {
     expect(changedColumnNames(study)).toEqual(new Set(['PATIENT_ID', 'disease']));
   });
 
-  it('keeps every renamed column and every column with changed values', () => {
+  it('picks every renamed column and every column with changed values as "Changed"', () => {
     // 19 schema renames and one column whose values became ontology terms.
     const renamed = Array.from({ length: 19 }, (_, i) => column({ source: `col_${i}`, target: `field_${i}` }));
     const site = column({ source: 'site', target: 'site', action: 'matched', changed_cells: 60 });
@@ -84,7 +105,7 @@ describe('grid helpers', () => {
     const study = [...renamed, site, same];
     const gridNames = study.map((c) => c.target!);
 
-    const shown = visibleColumnIndexes(gridNames, changedColumnNames(study), { changedOnly: true, focus: null });
+    const shown = visibleColumnIndexes(gridNames, normalizeSelection(gridNames, changedColumnNames(study)));
 
     expect(shown.map((index) => gridNames[index])).toEqual([...renamed.map((c) => c.target), 'site']);
   });

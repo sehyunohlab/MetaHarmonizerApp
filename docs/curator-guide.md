@@ -236,10 +236,12 @@ export anything or mark the study as exported.
   cause: an accepted ontology term, or an
   apostrophe added so spreadsheets treat formula-like text (such as values
   starting with `=`, `+`, `-`, or `@`, but not plain numbers like `-5`) as
-  text. **Changed rows only** keeps rows with a changed value; **Changed
-  columns only** keeps columns that were renamed or have a changed value. Each
-  shows how many there are. **Values changed in** narrows the grid to one
-  column's changed values.
+  text. **Columns** opens a checklist of every exported column, each marked
+  as renamed, with its number of changed values, or unchanged. Show any
+  combination of columns, or pick **All**, **Changed** (renamed or with a
+  changed value), or **None**; search finds a column by its export or uploaded
+  name. **Changed rows only** keeps rows with a changed value in the shown
+  columns, and shows how many there are.
 - A warning appears when exported columns still use unreviewed mapping
   suggestions; review them first so the field names are final.
 

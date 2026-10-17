@@ -61,7 +61,7 @@ export default function ExportPage() {
       />
 
       {view === 'preview' ? (
-        <ChangePreview studyId={studyId} />
+        <ChangePreview key={studyId} studyId={studyId} />
       ) : (
         <ExportDownloads studyId={studyId} studyName={study?.name} />
       )}

@@ -56,6 +56,7 @@ class ExportPreviewRow(BaseModel):
 
 class ExportPreviewRows(BaseModel):
     total: int  # rows matching the filter
+    changed_total: int  # rows with a changed cell in the requested columns (all when none)
     offset: int
     limit: int
     columns: list[str]
