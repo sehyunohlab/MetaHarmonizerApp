@@ -77,7 +77,9 @@ class MockEngineAdapter:
                 )
         return results
 
-    def llm_match(self, csv_path: str, raw_column: str) -> list[dict[str, Any]]:
+    def llm_match(
+        self, csv_path: str, raw_column: str, target_schema: str | None = None
+    ) -> list[dict[str, Any]]:
         return [
             {
                 "field": f"mock_{raw_column.lower()}",

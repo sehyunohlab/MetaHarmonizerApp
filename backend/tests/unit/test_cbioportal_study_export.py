@@ -639,3 +639,28 @@ def test_study_folder_uses_the_uploaded_ids_in_every_file(monkeypatch):
     assert body("data_clinical_patient.txt") == [["007", "F"], ["7", "M"]]
     assert body("data_clinical_sample.txt") == [["007", "0012"], ["7", "0013"], ["007", "0014"]]
     assert "case_list_ids: 0012\t0013\t0014" in zf.read("case_lists/cases_all.txt").decode()
+
+
+def test_the_lab_vocabulary_identifiers_are_the_cbioportal_ids(monkeypatch):
+    # The default target schema, the lab's curated vocabulary, names the
+    # identifiers patientId and sampleId.
+    assert [exporter._cbio_id(f) for f in ("patientId", "sampleId", "body_site", "OS_STATUS")] == [
+        "PATIENT_ID", "SAMPLE_ID", "BODY_SITE", "OS_STATUS",
+    ]
+    raw_df, raw_text = _frames("pid,sid,sex\nP1,S1,F\nP2,S2,M\n")
+    mappings = [
+        {"raw_column": "pid", "matched_field": "patientId", "status": "accepted"},
+        {"raw_column": "sid", "matched_field": "sampleId", "status": "accepted"},
+        {"raw_column": "sex", "matched_field": "sex", "status": "accepted"},
+    ]
+    _patch_repos(monkeypatch, mappings, {"name": "Lab"})
+
+    zf = zipfile.ZipFile(io.BytesIO(asyncio.run(
+        exporter.export_cbioportal_study(None, "lab", raw_df, raw_text=raw_text)
+    )))
+
+    patient = zf.read("data_clinical_patient.txt").decode().splitlines()
+    sample = zf.read("data_clinical_sample.txt").decode().splitlines()
+    assert patient[4].split("\t") == ["PATIENT_ID", "SEX"]
+    assert sample[4].split("\t") == ["PATIENT_ID", "SAMPLE_ID"]
+    assert [line.split("\t") for line in sample[5:]] == [["P1", "S1"], ["P2", "S2"]]

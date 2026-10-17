@@ -9,8 +9,11 @@ class LLMMatchUnavailable(RuntimeError):
     """The LLM stage could not run (provider error, missing key, …)."""
 
 
-def llm_suggestions(file_path: str, raw_column: str) -> list[dict[str, Any]]:
-    """Suggested target fields for ``raw_column`` of the stored study file.
+def llm_suggestions(
+    file_path: str, raw_column: str, target_schema: str | None = None
+) -> list[dict[str, Any]]:
+    """Suggested target fields for ``raw_column`` of the stored study file,
+    among the fields of ``target_schema`` (the study's; the default when None).
 
     Raises ``LLMMatchUnavailable`` when reading the file or the LLM call fails
     with a ``RuntimeError``; errors while obtaining the engine propagate as-is.
@@ -21,6 +24,8 @@ def llm_suggestions(file_path: str, raw_column: str) -> list[dict[str, Any]]:
     engine = get_engine()
     try:
         with get_storage().local(file_path) as local_csv:
-            return engine.llm_match(csv_path=str(local_csv), raw_column=raw_column)
+            return engine.llm_match(
+                csv_path=str(local_csv), raw_column=raw_column, target_schema=target_schema
+            )
     except RuntimeError as exc:
         raise LLMMatchUnavailable(str(exc)) from exc

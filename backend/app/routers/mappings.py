@@ -14,6 +14,7 @@ from app.db.session import get_db
 from app.repositories import audit as audit_repo
 from app.repositories import learned_decisions as ld_repo
 from app.repositories import mappings as mappings_repo
+from app.repositories import schema_versions as schema_versions_repo
 from app.repositories import studies as studies_repo
 from app.routers.deps import (
     actor_label as _actor_label,
@@ -357,8 +358,18 @@ async def llm_rematch(
     if not study or not study.get("file_path"):
         raise HTTPException(status_code=404, detail="Study CSV not found")
 
+    # Suggest fields of the schema the study was mapped against.
+    version = (
+        await schema_versions_repo.get_by_id(db, study["schema_version_id"])
+        if study.get("schema_version_id")
+        else None
+    )
     try:
-        suggestions = llm_suggestions(study["file_path"], mapping["raw_column"])
+        suggestions = llm_suggestions(
+            study["file_path"],
+            mapping["raw_column"],
+            target_schema=version.target_schema if version else None,
+        )
     except LLMMatchUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
