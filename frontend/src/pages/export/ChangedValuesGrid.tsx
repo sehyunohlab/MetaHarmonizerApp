@@ -18,6 +18,8 @@ import {
   changesByColumn,
   clampOffset,
   mergedFrom,
+  mergedLabel,
+  mergedPhrase,
   renamedFrom,
   rowRangeLabel,
   visibleColumnIndexes,
@@ -239,7 +241,7 @@ export function ChangedValuesGrid({
                           <span className="sr-only">{`, renamed from ${from}`}</span>
                           <span
                             aria-hidden="true"
-                            className="block font-mono text-[10px] font-normal text-rose-700 line-through decoration-rose-400/70 dark:text-rose-300"
+                            className="block max-w-[18rem] truncate font-mono text-[10px] font-normal text-rose-700 line-through decoration-rose-400/70 dark:text-rose-300"
                           >
                             {from}
                           </span>
@@ -247,12 +249,12 @@ export function ChangedValuesGrid({
                       )}
                       {merged && (
                         <>
-                          <span className="sr-only">{`, merged from ${merged.join(' and ')}`}</span>
+                          <span className="sr-only">{`, merged from ${mergedPhrase(merged)}`}</span>
                           <span
                             aria-hidden="true"
-                            className="block font-mono text-[10px] font-normal text-violet-700 dark:text-violet-300"
+                            className="block max-w-[18rem] truncate font-mono text-[10px] font-normal text-violet-700 dark:text-violet-300"
                           >
-                            {merged.join(' + ')}
+                            {mergedLabel(merged)}
                           </span>
                         </>
                       )}

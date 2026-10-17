@@ -187,4 +187,76 @@ test.describe('authenticated journey', () => {
       await request.delete(`/api/v1/studies/${accepted.study_id}`, { headers: auth });
     }
   });
+
+  test('UI keeps a column merged from many long names inside the column list', async ({ page, request }) => {
+    test.setTimeout(90_000);
+    const login = await request.post('/api/v1/auth/login', {
+      data: { email: EMAIL, password: PASSWORD },
+    });
+    const { access_token } = await login.json();
+    const auth = { Authorization: `Bearer ${access_token}` };
+    // Spellings of one long name: every engine maps them to the same field.
+    const names = [
+      'GLUTAMATE_DECARBOXYLASE_2_ANTIBODY_TITRE',
+      'Glutamate_Decarboxylase_2_Antibody_Titre',
+      'glutamate_decarboxylase_2_antibody_titre',
+      'Glutamate_decarboxylase_2_antibody_titre',
+      'GLUTAMATE_decarboxylase_2_antibody_titre',
+    ];
+    const upload = await request.post('/api/v1/harmonize', {
+      headers: auth,
+      multipart: {
+        file: {
+          name: 'wide-merge-regression.csv',
+          mimeType: 'text/csv',
+          buffer: Buffer.from(`participant_id,${names.join(',')}\nP001,1,2,3,4,5\nP002,6,7,8,9,10\n`),
+        },
+        mode: 'schema',
+      },
+    });
+    expect(upload.ok()).toBeTruthy();
+    const accepted = await upload.json();
+
+    try {
+      await expect.poll(async () => {
+        const status = await request.get(`/api/v1/jobs/${accepted.study_id}`, { headers: auth });
+        return (await status.json()).state;
+      }, { timeout: 60_000 }).toBe('succeeded');
+      const body = await (
+        await request.get(`/api/v1/export/${accepted.study_id}/preview`, { headers: auth })
+      ).json();
+      const merged = body.columns.filter((column: { action: string }) => column.action === 'merged');
+      expect(merged.map((column: { source: string }) => column.source)).toEqual(names);
+
+      await page.goto('/login');
+      await page.locator('input[type="email"], input[name="email"]').first().fill(EMAIL!);
+      await page.locator('input[type="password"]').first().fill(PASSWORD!);
+      await page.locator('button[type="submit"]').first().click();
+      await expect(page).not.toHaveURL(/\/login$/, { timeout: 10_000 });
+      const closeShowcase = page.getByRole('button', { name: 'Close showcase' });
+      if (await closeShowcase.isVisible()) await closeShowcase.click();
+      await page.goto(`/export/${accepted.study_id}?view=preview`);
+
+      // The header names two columns and how many more, on one capped line.
+      const grid = page.getByRole('region', { name: 'Harmonized metadata table' });
+      const header = grid.getByRole('columnheader', { name: new RegExp(`^${merged[0].target}\\s*, merged from 5 columns`) });
+      await expect(header).toContainText(`${names[0]} + ${names[1]} + 3 more`);
+      expect((await header.locator('span[aria-hidden="true"]').boundingBox())!.width).toBeLessThanOrEqual(300);
+
+      // Nothing in the checklist extends past the dropdown.
+      await page.getByRole('button', { name: /^Columns/ }).click();
+      const list = page.getByRole('group', { name: 'Columns to show' });
+      await expect(list.getByRole('checkbox', { name: merged[0].target, exact: true })).toHaveAccessibleDescription(
+        `merged from 5 columns: ${names[0]}, ${names[1]} and 3 more`,
+      );
+      const overflowing = await list.evaluate((fieldset) => {
+        const panel = (fieldset.parentElement as HTMLElement).getBoundingClientRect();
+        return [...fieldset.querySelectorAll('*')].filter((el) => el.getBoundingClientRect().right > panel.right + 1)
+          .length;
+      });
+      expect(overflowing).toBe(0);
+    } finally {
+      await request.delete(`/api/v1/studies/${accepted.study_id}`, { headers: auth });
+    }
+  });
 });

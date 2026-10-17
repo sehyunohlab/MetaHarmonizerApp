@@ -117,6 +117,11 @@ versioning once a stable `1.x` release is declared.
   fields (PATIENT_ID, SAMPLE_ID, and fields named like `subject_id` or
   `sample_id`) still take one column, chosen by the existing rule. The export
   preview marks merged columns, and its summary counts them.
+- A column merged from many columns no longer stretches the export preview:
+  its header and the **Columns** list name the first two merged columns and
+  how many more (all of them on hover), and the list stays inside its
+  dropdown. Before, a field merged from 18 columns made the list 1,504 px wide
+  in a 320 px dropdown and the column header wider than the whole table.
 
 ## [0.1.0] - 2026-08-19
 

@@ -140,7 +140,8 @@ export function ColumnPicker({
             </button>
           </div>
 
-          <fieldset className="mt-1 border-t border-slate-100 pt-1 dark:border-slate-800">
+          {/* A fieldset is as wide as its longest line unless told otherwise (min-w-0). */}
+          <fieldset className="mt-1 min-w-0 border-t border-slate-100 pt-1 dark:border-slate-800">
             <legend className="sr-only">Columns to show</legend>
             {shown.length === 0 ? (
               <p className="px-2 py-6 text-center text-xs text-slate-500 dark:text-slate-400">No columns match.</p>
@@ -162,15 +163,17 @@ export function ColumnPicker({
                         aria-describedby={`${inputId}-change`}
                         onChange={(event) => toggle(name, event.target.checked)}
                       />
-                      <span className="min-w-0">
+                      <span className="min-w-0 flex-1">
                         <label
                           htmlFor={inputId}
+                          title={name}
                           className="block cursor-pointer truncate font-mono text-xs font-semibold text-slate-800 dark:text-slate-100"
                         >
                           {name}
                         </label>
                         <span
                           id={`${inputId}-change`}
+                          title={mergedFrom[name] ? `Merged from ${mergedFrom[name].join(', ')}` : undefined}
                           className="block truncate text-[11px] text-slate-500 dark:text-slate-400"
                         >
                           {describeColumnChange(renamedFrom[name], changedCells[name] ?? 0, mergedFrom[name])}
