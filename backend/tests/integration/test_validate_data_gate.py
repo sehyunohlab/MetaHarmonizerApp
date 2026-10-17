@@ -79,7 +79,7 @@ def _sample_study_zip(monkeypatch) -> bytes:
         {"raw_column": "alt", "matched_field": "OTHER_SAMPLE_ID", "status": "accepted"},
         # Two columns mapped to one attribute are merged into it.
         {"raw_column": "dx", "matched_field": "DIAGNOSIS", "status": "accepted"},
-        {"raw_column": "dx_detail", "matched_field": "DIAGNOSIS", "status": "pending"},
+        {"raw_column": "dx_detail", "matched_field": "DIAGNOSIS", "status": "accepted"},
     ]
     # The pipeline keys a term by the inferred value ("1.0"); a re-map after a
     # schema edit by the uploaded text ("2").

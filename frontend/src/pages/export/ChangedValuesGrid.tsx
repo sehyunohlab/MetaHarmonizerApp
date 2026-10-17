@@ -17,6 +17,7 @@ import {
   changedColumnNames,
   changesByColumn,
   clampOffset,
+  companionColumns,
   mergedFrom,
   mergedLabel,
   mergedPhrase,
@@ -62,7 +63,9 @@ export function ChangedValuesGrid({
   const changedColumns = changedColumnNames(columns);
   const sources = renamedFrom(columns);
   const merges = mergedFrom(columns);
+  const companions = companionColumns(columns, rows.columns);
   const hasMerged = rows.columns.some((name) => merges[name]);
+  const hasCurated = Object.keys(companions).length > 0;
   const selection = query.columns;
   const visible = visibleColumnIndexes(rows.columns, selection);
   const noneChosen = selection !== null && selection.length === 0;
@@ -78,7 +81,11 @@ export function ChangedValuesGrid({
       <CardHeader
         icon={<Rows3 className="h-4 w-4" />}
         title="Harmonized metadata"
-        description={`Every exported value next to your upload. Renamed columns and changed cells show the uploaded name or value struck through; merged columns list each row's values separated by ${MULTI_VALUE_DELIMITER}.`}
+        description={`Every exported value next to your upload. Renamed columns and changed cells show the uploaded name or value struck through; merged columns list each row's values separated by ${MULTI_VALUE_DELIMITER}.${
+          hasCurated
+            ? " A field mapped to ontology terms is written as four columns, as in the lab's harmonized files: its uploaded values, its terms, their ids and the columns they came from."
+            : ''
+        }`}
         action={fetching ? <Spinner className="h-4 w-4 text-slate-400" /> : undefined}
       />
 
@@ -104,6 +111,7 @@ export function ChangedValuesGrid({
             renamedFrom={sources}
             mergedFrom={merges}
             changedCells={changedCells}
+            described={companions}
             onChange={chooseColumns}
           />
           {selection !== null && (
@@ -213,7 +221,9 @@ export function ChangedValuesGrid({
                           ? `Renamed from ${from}`
                           : merged
                             ? `Merged from ${merged.join(', ')}; values separated by ${MULTI_VALUE_DELIMITER}`
-                            : undefined
+                            : companions[name]
+                              ? `The ${companions[name]}`
+                              : undefined
                       }
                       className={cn(
                         'sticky top-0 z-20 whitespace-nowrap border-b px-3 py-2 text-left align-bottom',

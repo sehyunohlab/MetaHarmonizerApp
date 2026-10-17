@@ -4,8 +4,9 @@ The Harmonized CSV, the cBioPortal clinical file and the cBioPortal study
 folder (attributes and PATIENT_ID / SAMPLE_ID) share one rule:
 
 - a rejected or unmapped column never fills a schema field;
-- every column mapped to a field fills it, in upload order, and their values
-  are merged;
+- the accepted columns mapped to a field fill it, in upload order, and their
+  values are merged; a field without an accepted column takes its best
+  unreviewed suggestion;
 - an identifier field takes one column: a mapping a curator reviewed beats one
   the engine accepted on its own, which beats a pending suggestion; then the
   higher confidence wins, then the column that comes first in the upload,
@@ -142,15 +143,38 @@ def test_the_study_folder_takes_sample_ids_from_the_accepted_column(monkeypatch)
     assert [row[header.index("SAMPLE_ID")] for row in data] == ["S1", "S2"]
 
 
-def test_every_column_mapped_to_a_field_fills_it_in_every_export():
+def test_accepted_columns_mapped_to_a_field_are_merged_in_every_export():
+    df = pd.DataFrame({"Gender": ["F", "M"], "Sex_Recorded": ["female", "female"]})
+    mappings = [
+        _m("Sex_Recorded", "sex", confidence=0.99),
+        _m("Gender", "sex", confidence=0.71),
+    ]
+
+    assert csv_sources(df, mappings)["SEX"] == ("Gender", "Sex_Recorded")  # upload order
+    assert cbio_sources(df, mappings)["SEX"] == ("Gender", "Sex_Recorded")
+
+
+def test_an_unreviewed_suggestion_is_not_merged_into_an_accepted_field():
+    # The lab merges only the columns its curators assigned to a field.
     df = pd.DataFrame({"Gender": ["F", "M"], "Sex_Guess": ["female", "female"]})
     mappings = [
         _m("Sex_Guess", "sex", "pending", confidence=0.99),
         _m("Gender", "sex", confidence=0.71),
     ]
 
-    assert csv_sources(df, mappings)["SEX"] == ("Gender", "Sex_Guess")  # upload order
-    assert cbio_sources(df, mappings)["SEX"] == ("Gender", "Sex_Guess")
+    assert csv_sources(df, mappings)["SEX"] == ("Gender",)
+    assert cbio_sources(df, mappings)["SEX"] == ("Gender",)
+
+
+def test_a_field_without_an_accepted_column_takes_its_best_suggestion():
+    df = pd.DataFrame({"Gender": ["F", "M"], "Sex_Guess": ["female", "female"]})
+    mappings = [
+        _m("Gender", "sex", "pending", confidence=0.71),
+        _m("Sex_Guess", "sex", "pending", confidence=0.99),
+    ]
+
+    assert csv_sources(df, mappings)["SEX"] == ("Sex_Guess",)
+    assert cbio_sources(df, mappings)["SEX"] == ("Sex_Guess",)
 
 
 def test_for_an_identifier_a_mapping_you_reviewed_beats_one_the_engine_accepted():

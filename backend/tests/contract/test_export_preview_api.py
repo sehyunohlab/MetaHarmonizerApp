@@ -140,36 +140,46 @@ async def test_preview_matches_the_download_and_does_not_mark_export(env):
         assert body["summary"] == {
             "rows": 3,
             "columns_before": 4,
-            "columns_after": 4,
+            "columns_after": 7,  # sex is curated: the lab's four columns
             "renamed": 4,
             "matched": 0,
             "merged": 0,
             "kept": 0,
             "dropped": 0,
             "pending": 1,
-            "changed_cells": 3,
-            "changed_rows": 2,
-            "compared_cells": 12,
+            "changed_cells": 4,
+            "changed_rows": 3,
+            "compared_cells": 21,
         }
         gender = next(col for col in body["columns"] if col["source"] == "gender")
-        assert gender["target"] == "sex"
+        assert gender["target"] == "curated_sex"
+        # "M"'s term is still pending, so the curated value leaves it out.
         assert gender["value_changes"] == [
-            {"before": "F", "after": "Female", "count": 2, "reason": "ontology"}
+            {"before": "F", "after": "Female", "count": 2, "reason": "ontology"},
+            {"before": "M", "after": "NA", "count": 1, "reason": "other"},
         ]
         rows = body["rows"]
-        assert rows["columns"] == ["sample_id", "sex", "age_years", "comment"]
+        assert rows["columns"] == [
+            "sample_id",
+            "original_sex_value",
+            "curated_sex",
+            "curated_sex_ontology_term_id",
+            "curated_sex_source",
+            "age_years",
+            "comment",
+        ]
         assert [item["line"] for item in rows["items"]] == [1, 2, 3]  # every row by default
-        assert rows["changed_total"] == 2
-        assert rows["items"][1]["changes"] == []
+        assert rows["changed_total"] == 3
+        assert rows["items"][1]["changes"] == [{"column": 2, "before": "M", "reason": "other"}]
         changed = (
             await c.get(
                 f"/api/v1/export/{sid}/preview", params={"changed_only": "true"}, headers=headers
             )
         ).json()["rows"]
-        assert [item["line"] for item in changed["items"]] == [1, 3]
+        assert [item["line"] for item in changed["items"]] == [1, 2, 3]
         assert changed["items"][0]["changes"] == [
-            {"column": 1, "before": "F", "reason": "ontology"},
-            {"column": 3, "before": "=cmd", "reason": "escaped"},
+            {"column": 2, "before": "F", "reason": "ontology"},
+            {"column": 6, "before": "=cmd", "reason": "escaped"},
         ]
 
         everything = (
@@ -187,9 +197,9 @@ async def test_preview_matches_the_download_and_does_not_mark_export(env):
         assert exported[1:] == [item["values"] for item in everything["items"]]
         # Original cell text survives: no "51.0", "NA" kept, blank stays blank.
         assert exported[1:] == [
-            ["S1", "Female", "51", "'=cmd"],
-            ["S2", "M", "", "fine"],
-            ["S3", "Female", "7", "NA"],
+            ["S1", "F", "Female", "NA", "gender", "51", "'=cmd"],
+            ["S2", "M", "NA", "NA", "gender", "", "fine"],
+            ["S3", "F", "Female", "NA", "gender", "7", "NA"],
         ]
         assert await _exported(sid) is True
 
@@ -231,14 +241,18 @@ async def test_preview_validates_paging_and_column(env):
         either = (
             await c.get(
                 url,
-                params=[("column", "sex"), ("column", "comment"), ("changed_only", "true")],
+                params=[("column", "curated_sex"), ("column", "comment"), ("changed_only", "true")],
                 headers=headers,
             )
         ).json()["rows"]
-        assert [item["line"] for item in either["items"]] == [1, 3]
-        assert either["changed_total"] == 2
+        assert [item["line"] for item in either["items"]] == [1, 2, 3]
+        assert either["changed_total"] == 3
         renamed_only = (
-            await c.get(url, params=[("column", "sample_id"), ("column", "age_years")], headers=headers)
+            await c.get(
+                url,
+                params=[("column", "sample_id"), ("column", "age_years"), ("column", "original_sex_value")],
+                headers=headers,
+            )
         ).json()["rows"]
         assert renamed_only["total"] == 3 and renamed_only["changed_total"] == 0
         one_unknown = await c.get(

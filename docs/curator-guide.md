@@ -218,14 +218,29 @@ export anything or mark the study as exported.
 - The summary shows the row count (rows are never added, removed, or
   reordered), how many columns are exported, renamed, merged, or left out, and
   how many cell values change.
-- Columns mapped to the same field are merged into one column of that name,
-  placed where the first of them is in your file, the way the lab's curated
-  metadata consolidates them. Each row lists those columns' values in file
-  order, each replaced by its accepted ontology term, separated by `<;>` (a
-  value may itself contain `;`). Blank and missing values are skipped and a
-  value repeated across the columns is listed once, so `F` and `female` that
-  both became `Female` give `Female`. To leave a column out of the merge,
-  reject or edit its mapping.
+- Columns you accepted for the same field are merged into it, placed where the
+  first of them is in your file, the way the lab's harmonized metadata
+  consolidates them. Each row lists those columns' values in file order,
+  separated by `<;>` (a value may itself contain `;`); blank and missing values
+  are skipped. Only accepted columns are merged: a column whose mapping is
+  still an unreviewed suggestion is not added to a field you accepted columns
+  for, and a field with no accepted column uses its best suggestion alone. To
+  leave a column out of the merge, reject or edit its mapping.
+- A field whose values are mapped to ontology terms (such as disease or body
+  site) is written as four columns, as in the lab's harmonized files
+  (MetaHarmonizer_Test_Data): `original_<field>_value` holds each row's
+  uploaded values joined by `<;>`, in capitals, repeats included;
+  `curated_<field>` holds their accepted terms, each once, so `F` and `female`
+  that both became `Female` give `Female`; `curated_<field>_ontology_term_id`
+  holds the terms' ids in the same order; and `curated_<field>_source` names
+  the columns the row's values came from, joined by `;`. A value without an
+  accepted term is left out of `curated_<field>` but stays in
+  `original_<field>_value`, and an empty cell is written `NA`. When one value
+  needs several terms (`Abdomen, Pelvis` is Abdomen and Pelvis), edit its term
+  to the terms joined by `<;>` and its id to their ids in the same order. The
+  preview compares only `curated_<field>` with your upload; the **Columns**
+  list says what each companion column holds. Any other field is one column
+  named after it.
 - An identifier field (`PATIENT_ID`, `SAMPLE_ID`, or a field named like
   `subject_id` or `sample_id`) holds one value per row, so only one of the
   columns mapped to it is exported: a mapping you accepted or edited wins over
@@ -242,7 +257,8 @@ export anything or mark the study as exported.
   lists the columns merged into it, or past three the first two and how many
   more (hover over the header for all of them). Changed cells show the
   exported value with the uploaded value struck through beneath it, colored by
-  cause: an accepted ontology term, or an
+  cause: an accepted ontology term, a value left out because it has no
+  accepted term (shown as `NA` when nothing is left), or an
   apostrophe added so spreadsheets treat formula-like text (such as values
   starting with `=`, `+`, `-`, or `@`, but not plain numbers like `-5`) as
   text. **Columns** opens a checklist of every exported column, each marked
@@ -257,9 +273,10 @@ export anything or mark the study as exported.
 Then switch to **Downloads** and download any required formats before
 completing the study:
 
-- **Harmonized CSV** contains renamed fields and accepted ontology rewrites.
-  Every other cell keeps its uploaded text exactly, including number formatting
-  and missing-value markers such as `NA`.
+- **Harmonized CSV** contains renamed fields and, for fields mapped to ontology
+  terms, the four curated columns described above. Every other cell keeps its
+  uploaded text exactly, including number formatting and missing-value markers
+  such as `NA`.
 - **cBioPortal Format** is a tab-separated clinical file with cBioPortal header
   lines. Cells keep their uploaded text apart from accepted ontology terms, so
   a sample ID `0012` stays `0012` and an age `045` is not rewritten as `45.0`.

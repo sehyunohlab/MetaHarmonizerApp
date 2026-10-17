@@ -92,7 +92,7 @@ def test_merged_attributes_join_values_and_fall_back_to_string():
         {"raw_column": "patient", "matched_field": "PATIENT_ID", "status": "accepted"},
         {"raw_column": "sample", "matched_field": "SAMPLE_ID", "status": "accepted"},
         {"raw_column": "stage", "matched_field": "tumor_stage", "status": "accepted"},
-        {"raw_column": "stage2", "matched_field": "tumor_stage", "status": "pending"},
+        {"raw_column": "stage2", "matched_field": "tumor_stage", "status": "accepted"},
         {"raw_column": "count", "matched_field": "visits", "status": "accepted"},
         {"raw_column": "count2", "matched_field": "visits", "status": "accepted"},
         {"raw_column": "ffpe", "matched_field": "ffpe", "status": "accepted"},

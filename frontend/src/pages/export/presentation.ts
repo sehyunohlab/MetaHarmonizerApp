@@ -11,7 +11,10 @@ export const REASON_META: Record<ExportChangeReason, { label: string; hint: stri
     label: 'Spreadsheet-safe',
     hint: 'Prefixed with an apostrophe so spreadsheets show it as text, not a formula.',
   },
-  other: { label: 'Changed', hint: 'Differs from the uploaded value.' },
+  other: {
+    label: 'Changed',
+    hint: 'Differs from the uploaded value. A value without a confirmed term is left out of its curated column and kept in its original_…_value column.',
+  },
 };
 
 /** Share of ``whole`` as a compact percentage ("0%", "<0.1%", "12.5%", "100%"). */
@@ -126,6 +129,28 @@ export function mergedFrom(columns: ExportColumnChange[]): Record<string, string
     if (column.target && column.action === 'merged') (sources[column.target] ??= []).push(column.source);
   }
   return sources;
+}
+
+/** What each companion column of a curated field holds, keyed by export name.
+ *  A field mapped to ontology terms is exported as the lab's four columns (see
+ *  the backend exporter): ``curated_<f>`` with its ``original_<f>_value``,
+ *  ``curated_<f>_ontology_term_id`` and ``curated_<f>_source``. */
+export function companionColumns(columns: ExportColumnChange[], exported: readonly string[]): Record<string, string> {
+  const present = new Set(exported);
+  const described: Record<string, string> = {};
+  for (const column of columns) {
+    const curated = column.target;
+    if (!curated?.startsWith('curated_')) continue;
+    const field = curated.slice('curated_'.length);
+    const companions: [string, string][] = [
+      [`original_${field}_value`, `uploaded values of ${curated}`],
+      [`curated_${field}_ontology_term_id`, `ontology term ids of ${curated}`],
+      [`curated_${field}_source`, `uploaded columns of ${curated}`],
+    ];
+    if (!companions.every(([name]) => present.has(name))) continue;
+    for (const [name, text] of companions) described[name] = text;
+  }
+  return described;
 }
 
 /** Changed-cell counts keyed by export column name (a merged column's on its first source). */
