@@ -1,0 +1,593 @@
+{
+ "checked": "2026-10-18",
+ "versions": {
+  "ncit": "26.09d",
+  "hancestro": "2025-10-14",
+  "uberon": "http://purl.obolibrary.org/obo/uberon/releases/2026-10-01/uberon.owl"
+ },
+ "labels": {
+  "HANCESTRO:0005": [
+   "european ancestry",
+   "caucasian",
+   "european",
+   "white"
+  ],
+  "HANCESTRO:0008": [
+   "asian ancestry",
+   "asian",
+   "asian unspecified"
+  ],
+  "HANCESTRO:0010": [
+   "african ancestry",
+   "african unspecified"
+  ],
+  "HANCESTRO:0013": [
+   "indigenous american ancestry",
+   "indigenous american"
+  ],
+  "HANCESTRO:0014": [
+   "latin or admixed american ancestry",
+   "latin or admixed american",
+   "mestizo",
+   "pardo"
+  ],
+  "HANCESTRO:0015": [
+   "greater middle eastern (middle eastern or north african or persian) ancestry",
+   "greater middle eastern (middle eastern or north african or persian)",
+   "middle eastern/north african"
+  ],
+  "HANCESTRO:0016": [
+   "african american or afro-caribbean ancestry",
+   "african american or afro-caribbean"
+  ],
+  "HANCESTRO:0017": [
+   "oceanian ancestry",
+   "oceanian"
+  ],
+  "NCIT:C122936": [
+   "patient derived xenograft",
+   "patient-derived xenograft",
+   "patient-derived xenograft model",
+   "pdtx",
+   "pdx",
+   "pdx model"
+  ],
+  "NCIT:C128274": [
+   "circulating cell-free dna",
+   "cell free circulating dna",
+   "cell free dna",
+   "cfdna",
+   "circulating cell free dna",
+   "circulating dna"
+  ],
+  "NCIT:C12932": [
+   "xenograft",
+   "heterograft",
+   "xenotransplant"
+  ],
+  "NCIT:C133261": [
+   "bone marrow aspirate",
+   "bone marrow, liquid",
+   "human bone marrow aspirate"
+  ],
+  "NCIT:C14165": [
+   "normal"
+  ],
+  "NCIT:C15197": [
+   "case-control study",
+   "case control"
+  ],
+  "NCIT:C15262": [
+   "immunotherapy",
+   "immunological",
+   "immunological therapy",
+   "immunologically directed therapy"
+  ],
+  "NCIT:C15273": [
+   "longitudinal study",
+   "prospective"
+  ],
+  "NCIT:C15313": [
+   "radiation therapy",
+   "cancer radiotherapy",
+   "energy type",
+   "energy_type",
+   "irradiate",
+   "irradiated",
+   "irradiation",
+   "radiation",
+   "radiation therapy, nos",
+   "radiotherapeutics",
+   "radiotherapy",
+   "rt",
+   "therapy, radiation"
+  ],
+  "NCIT:C15632": [
+   "chemotherapy",
+   "chemo",
+   "chemotherapy (nos)",
+   "chemotherapy, cancer, general"
+  ],
+  "NCIT:C156848": [
+   "tumor free",
+   "tf-tumor free"
+  ],
+  "NCIT:C156849": [
+   "with tumor",
+   "wt-with tumor"
+  ],
+  "NCIT:C158758": [
+   "resection",
+   "surgical resection"
+  ],
+  "NCIT:C16084": [
+   "observational study",
+   "observational",
+   "observational trial"
+  ],
+  "NCIT:C16268": [
+   "elderly",
+   "aged 65 and over",
+   "elderly (over 65)",
+   "senior citizen"
+  ],
+  "NCIT:C16311": [
+   "australia",
+   "036",
+   "au",
+   "aus"
+  ],
+  "NCIT:C16364": [
+   "brazil",
+   "076",
+   "br",
+   "bra"
+  ],
+  "NCIT:C16368": [
+   "bulgaria",
+   "100",
+   "bg",
+   "bgr",
+   "republic of bulgaria"
+  ],
+  "NCIT:C16380": [
+   "canada",
+   "124",
+   "ca",
+   "can"
+  ],
+  "NCIT:C16403": [
+   "cell line",
+   "cell-line",
+   "cellline",
+   "cultured cell line",
+   "cultured cells"
+  ],
+  "NCIT:C16423": [
+   "child",
+   "children",
+   "children (0-21)"
+  ],
+  "NCIT:C16428": [
+   "china",
+   "156",
+   "chn",
+   "cn"
+  ],
+  "NCIT:C16474": [
+   "croatia",
+   "191",
+   "hr",
+   "hrv"
+  ],
+  "NCIT:C16496": [
+   "denmark",
+   "208",
+   "dk",
+   "dnk"
+  ],
+  "NCIT:C16576": [
+   "female",
+   "f"
+  ],
+  "NCIT:C16584": [
+   "finland",
+   "246",
+   "fi",
+   "fin",
+   "republic of finland"
+  ],
+  "NCIT:C16592": [
+   "france",
+   "250",
+   "fr",
+   "fra"
+  ],
+  "NCIT:C16636": [
+   "germany",
+   "276",
+   "de",
+   "deu"
+  ],
+  "NCIT:C16727": [
+   "india",
+   "356",
+   "in",
+   "ind"
+  ],
+  "NCIT:C16731": [
+   "newborn",
+   "neonatal",
+   "neonate"
+  ],
+  "NCIT:C16756": [
+   "iraq",
+   "368",
+   "iq",
+   "irq"
+  ],
+  "NCIT:C16761": [
+   "italy",
+   "380",
+   "it",
+   "ita"
+  ],
+  "NCIT:C16764": [
+   "japan",
+   "392",
+   "jp",
+   "jpn"
+  ],
+  "NCIT:C16774": [
+   "korea, republic of",
+   "410",
+   "kor",
+   "korea, south",
+   "kr",
+   "republic of korea",
+   "south korea"
+  ],
+  "NCIT:C16850": [
+   "mexico",
+   "484",
+   "mex",
+   "mx"
+  ],
+  "NCIT:C16871": [
+   "moldova, republic of",
+   "498",
+   "md",
+   "mda",
+   "moldova",
+   "republic of moldova"
+  ],
+  "NCIT:C16903": [
+   "netherlands",
+   "528",
+   "kingdom of the netherlands",
+   "nl",
+   "nld"
+  ],
+  "NCIT:C16978": [
+   "philippines",
+   "608",
+   "ph",
+   "phl"
+  ],
+  "NCIT:C17002": [
+   "poland",
+   "616",
+   "pl",
+   "pol"
+  ],
+  "NCIT:C17108": [
+   "romania",
+   "642",
+   "ro",
+   "rou"
+  ],
+  "NCIT:C17111": [
+   "russian federation",
+   "643",
+   "ru",
+   "rus",
+   "russia"
+  ],
+  "NCIT:C17134": [
+   "singapore",
+   "702",
+   "sg",
+   "sgp"
+  ],
+  "NCIT:C17152": [
+   "spain",
+   "724",
+   "es",
+   "esp"
+  ],
+  "NCIT:C17173": [
+   "surgery",
+   "surgical profession",
+   "surgical specialties",
+   "surgical specialty"
+  ],
+  "NCIT:C17180": [
+   "sweden",
+   "752",
+   "se",
+   "swe"
+  ],
+  "NCIT:C172259": [
+   "organoid",
+   "3d organoid"
+  ],
+  "NCIT:C17229": [
+   "ukraine",
+   "804",
+   "ua",
+   "ukr"
+  ],
+  "NCIT:C17233": [
+   "united kingdom",
+   "826",
+   "gb",
+   "gbr",
+   "united kingdom of great britain and northern ireland"
+  ],
+  "NCIT:C17234": [
+   "united states",
+   "840",
+   "united states of america",
+   "us",
+   "usa"
+  ],
+  "NCIT:C17252": [
+   "viet nam",
+   "704",
+   "vietnam",
+   "vn",
+   "vnm"
+  ],
+  "NCIT:C173496": [
+   "peripheral blood",
+   "peripheral blood specimen"
+  ],
+  "NCIT:C17600": [
+   "adult",
+   "adult human (21+)",
+   "human, adult"
+  ],
+  "NCIT:C176551": [
+   "locally recurrent disease",
+   "local recurrence"
+  ],
+  "NCIT:C18202": [
+   "biopsy specimen",
+   "biopsy sample"
+  ],
+  "NCIT:C18206": [
+   "distant metastasis",
+   "distant",
+   "distant cancer"
+  ],
+  "NCIT:C189087": [
+   "leukocyte sample",
+   "blood: leukocytes"
+  ],
+  "NCIT:C191345": [
+   "clinical relapse",
+   "clinical recurrence"
+  ],
+  "NCIT:C20197": [
+   "male",
+   "human, male",
+   "m"
+  ],
+  "NCIT:C26747": [
+   "type 2 diabetes mellitus",
+   "adult onset diabetes",
+   "adult-onset diabetes",
+   "diabetes, type 2",
+   "diabetes, type ii",
+   "niddm",
+   "non-insulin dependent diabetes",
+   "non-insulin dependent diabetes mellitus",
+   "noninsulin dependent diabetes",
+   "t2dm - type 2 diabetes mellitus",
+   "type 2 diabetes",
+   "type 2 diabetes mellitus non-insulin dependent",
+   "type ii diabetes",
+   "type ii diabetes mellitus"
+  ],
+  "NCIT:C27954": [
+   "adolescent",
+   "adolescents"
+  ],
+  "NCIT:C27956": [
+   "infant"
+  ],
+  "NCIT:C2855": [
+   "adenoma",
+   "adenoma, benign",
+   "adenoma, nos"
+  ],
+  "NCIT:C28554": [
+   "dead",
+   "death",
+   "death (event)",
+   "death nos",
+   "deceased",
+   "died",
+   "expired",
+   "expired/death",
+   "loss of life",
+   "patient deceased"
+  ],
+  "NCIT:C2952": [
+   "ulcerative colitis",
+   "colitis ulcerative"
+  ],
+  "NCIT:C2955": [
+   "colorectal carcinoma",
+   "colorectal cancer",
+   "colorectal cancer, nos",
+   "crc"
+  ],
+  "NCIT:C2965": [
+   "crohn disease",
+   "crohn's disease",
+   "regional enteritis"
+  ],
+  "NCIT:C2986": [
+   "type 1 diabetes mellitus",
+   "diabetes mellitus (type i)",
+   "diabetes, type i",
+   "iddm",
+   "immune mediated diabetes",
+   "insulin dependent diabetes",
+   "insulin dependent diabetes mellitus",
+   "juvenile diabetes",
+   "type 1 diabetes",
+   "type i diabetes",
+   "type i diabetes mellitus"
+  ],
+  "NCIT:C3138": [
+   "inflammatory bowel disease",
+   "autoimmune bowel disorder",
+   "ibd"
+  ],
+  "NCIT:C3261": [
+   "metastatic neoplasm",
+   "metastatic",
+   "metastatic tumor",
+   "neoplasm, metastatic",
+   "tumor, metastatic"
+  ],
+  "NCIT:C3262": [
+   "neoplasm",
+   "neoplasia",
+   "neoplasm, nos",
+   "neoplasms, nos",
+   "neoplastic disease",
+   "neoplastic growth",
+   "other neoplasm",
+   "tumor",
+   "tumor, nos"
+  ],
+  "NCIT:C3677": [
+   "benign neoplasm",
+   "benign neoplasms",
+   "benign tumor",
+   "benign unclassifiable tumor",
+   "neoplasm, benign",
+   "tumor, benign"
+  ],
+  "NCIT:C37987": [
+   "alive",
+   "live",
+   "living"
+  ],
+  "NCIT:C40413": [
+   "no evidence of disease",
+   "ned",
+   "no measurable disease"
+  ],
+  "NCIT:C4798": [
+   "recurrent neoplasm",
+   "neoplasm recurrence",
+   "recurrence",
+   "recurrent",
+   "recurrent tumor"
+  ],
+  "NCIT:C49651": [
+   "healthy subject",
+   "healthy volunteer"
+  ],
+  "NCIT:C49683": [
+   "children 2-11 years old",
+   "children (2-11)"
+  ],
+  "NCIT:C53310": [
+   "cross-sectional study",
+   "cross sectional"
+  ],
+  "NCIT:C64377": [
+   "serbia",
+   "688",
+   "people's republic of serbia",
+   "republic of serbia",
+   "rs",
+   "socialist republic of serbia",
+   "srb"
+  ],
+  "NCIT:C8509": [
+   "primary neoplasm",
+   "primary",
+   "primary tumor"
+  ],
+  "NCIT:C85405": [
+   "school age child"
+  ],
+  "UBERON:0000178": [
+   "blood",
+   "portion of blood",
+   "vertebrate blood",
+   "whole blood"
+  ],
+  "UBERON:0001155": [
+   "colon",
+   "hindgut",
+   "large bowel",
+   "posterior intestine"
+  ],
+  "UBERON:0001988": [
+   "feces",
+   "cow dung",
+   "cow pat",
+   "droppings",
+   "dung",
+   "excrement",
+   "excreta",
+   "faeces",
+   "fecal material",
+   "fecal matter",
+   "fewmet",
+   "frass",
+   "guano",
+   "ordure",
+   "piece of shit",
+   "portion of dung",
+   "portion of excrement",
+   "portion of faeces",
+   "portion of fecal material",
+   "portion of fecal matter",
+   "portion of feces",
+   "portion of guano",
+   "portion of scat",
+   "portionem cacas",
+   "scat",
+   "spoor",
+   "spraint",
+   "stool"
+  ],
+  "UBERON:0002048": [
+   "lung",
+   "pulmo"
+  ],
+  "UBERON:0002097": [
+   "skin of body",
+   "entire integument",
+   "entire skin",
+   "integument",
+   "integumental organ",
+   "pelt",
+   "skin",
+   "skin organ"
+  ],
+  "UBERON:0002107": [
+   "liver",
+   "iecur",
+   "jecur"
+  ]
+ }
+}
