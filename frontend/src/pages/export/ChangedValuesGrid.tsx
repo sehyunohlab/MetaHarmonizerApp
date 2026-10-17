@@ -11,11 +11,13 @@ import { cn } from '../../lib/cn';
 import { CellText } from './CellText';
 import { ColumnPicker } from './ColumnPicker';
 import {
+  MULTI_VALUE_DELIMITER,
   REASON_META,
   changedCellsByTarget,
   changedColumnNames,
   changesByColumn,
   clampOffset,
+  mergedFrom,
   renamedFrom,
   rowRangeLabel,
   visibleColumnIndexes,
@@ -57,6 +59,8 @@ export function ChangedValuesGrid({
   const changedCells = changedCellsByTarget(columns);
   const changedColumns = changedColumnNames(columns);
   const sources = renamedFrom(columns);
+  const merges = mergedFrom(columns);
+  const hasMerged = rows.columns.some((name) => merges[name]);
   const selection = query.columns;
   const visible = visibleColumnIndexes(rows.columns, selection);
   const noneChosen = selection !== null && selection.length === 0;
@@ -72,7 +76,7 @@ export function ChangedValuesGrid({
       <CardHeader
         icon={<Rows3 className="h-4 w-4" />}
         title="Harmonized metadata"
-        description="Every exported value next to your upload. Renamed columns and changed cells show the uploaded name or value struck through."
+        description={`Every exported value next to your upload. Renamed columns and changed cells show the uploaded name or value struck through; merged columns list each row's values separated by ${MULTI_VALUE_DELIMITER}.`}
         action={fetching ? <Spinner className="h-4 w-4 text-slate-400" /> : undefined}
       />
 
@@ -96,6 +100,7 @@ export function ChangedValuesGrid({
             selected={selection}
             changed={changedColumns}
             renamedFrom={sources}
+            mergedFrom={merges}
             changedCells={changedCells}
             onChange={chooseColumns}
           />
@@ -196,22 +201,35 @@ export function ChangedValuesGrid({
                 {visible.map((index) => {
                   const name = rows.columns[index];
                   const from = sources[name];
+                  const merged = merges[name];
                   return (
                     <th
                       key={name}
                       scope="col"
-                      title={from ? `Renamed from ${from}` : undefined}
+                      title={
+                        from
+                          ? `Renamed from ${from}`
+                          : merged
+                            ? `Merged from ${merged.join(', ')}; values separated by ${MULTI_VALUE_DELIMITER}`
+                            : undefined
+                      }
                       className={cn(
                         'sticky top-0 z-20 whitespace-nowrap border-b px-3 py-2 text-left align-bottom',
                         from
                           ? 'border-primary-200 bg-primary-50 dark:border-primary-800 dark:bg-primary-950'
-                          : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800',
+                          : merged
+                            ? 'border-violet-200 bg-violet-50 dark:border-violet-800 dark:bg-violet-950'
+                            : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800',
                       )}
                     >
                       <span
                         className={cn(
                           'block font-mono text-[11px] font-semibold',
-                          from ? 'text-primary-900 dark:text-primary-100' : 'text-slate-800 dark:text-slate-100',
+                          from
+                            ? 'text-primary-900 dark:text-primary-100'
+                            : merged
+                              ? 'text-violet-900 dark:text-violet-100'
+                              : 'text-slate-800 dark:text-slate-100',
                         )}
                       >
                         {name}
@@ -224,6 +242,17 @@ export function ChangedValuesGrid({
                             className="block font-mono text-[10px] font-normal text-rose-700 line-through decoration-rose-400/70 dark:text-rose-300"
                           >
                             {from}
+                          </span>
+                        </>
+                      )}
+                      {merged && (
+                        <>
+                          <span className="sr-only">{`, merged from ${merged.join(' and ')}`}</span>
+                          <span
+                            aria-hidden="true"
+                            className="block font-mono text-[10px] font-normal text-violet-700 dark:text-violet-300"
+                          >
+                            {merged.join(' + ')}
                           </span>
                         </>
                       )}
@@ -292,6 +321,12 @@ export function ChangedValuesGrid({
           <span className="h-3 w-3 rounded-sm bg-primary-100 ring-1 ring-primary-300 dark:bg-primary-500/20 dark:ring-primary-500/40" />
           Renamed column
         </span>
+        {hasMerged && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-sm bg-violet-100 ring-1 ring-violet-300 dark:bg-violet-500/20 dark:ring-violet-500/40" />
+            Merged column
+          </span>
+        )}
         <span className="inline-flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-sm bg-emerald-100 ring-1 ring-emerald-300 dark:bg-emerald-500/20 dark:ring-emerald-500/40" />
           {REASON_META.ontology.label}

@@ -34,7 +34,7 @@ describe('guest export preview', () => {
     expect(summary.columns_before).toBe(columns.length);
     expect(summary.columns_after).toBe(exported.length);
     expect(rows.columns).toEqual(exported.map((c) => c.target));
-    expect(summary.renamed + summary.matched + summary.kept + summary.dropped).toBe(columns.length);
+    expect(summary.renamed + summary.matched + summary.merged + summary.kept + summary.dropped).toBe(columns.length);
     expect(summary.pending).toBe(exported.filter((c) => c.mapping_status === 'pending').length);
     expect(summary.compared_cells).toBe(summary.rows * summary.columns_after);
     expect(summary.changed_cells).toBe(columns.reduce((sum, c) => sum + c.changed_cells, 0));

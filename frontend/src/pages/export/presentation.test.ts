@@ -5,8 +5,10 @@ import {
   changedColumnNames,
   changesByColumn,
   clampOffset,
+  columnsHint,
   describeColumnChange,
   formatPercent,
+  mergedFrom,
   normalizeSelection,
   pluralize,
   renamedFrom,
@@ -123,6 +125,29 @@ describe('grid helpers', () => {
   it('maps export names back to renamed sources and change counts', () => {
     expect(renamedFrom(columns)).toEqual({ sex: 'gender' });
     expect(changedCellsByTarget(columns)).toEqual({ sex: 12, country: 0, bmi: 0 });
+  });
+
+  it('lists the uploaded columns merged into each export column', () => {
+    const study = [
+      column({ source: 'Ethnicity', target: 'race', action: 'merged', changed_cells: 4 }),
+      column({ source: 'id', target: 'sample_id' }),
+      column({ source: 'Region', target: 'race', action: 'merged' }),
+      column({ source: 'country', target: 'country', action: 'matched' }),
+    ];
+    expect(mergedFrom(study)).toEqual({ race: ['Ethnicity', 'Region'] });
+    expect(renamedFrom(study)).toEqual({ sample_id: 'id' }); // a merge is not a rename
+    expect(changedColumnNames(study)).toEqual(new Set(['race', 'sample_id']));
+    expect(changedCellsByTarget(study)).toEqual({ race: 4, sample_id: 0, country: 0 });
+    expect(describeColumnChange(undefined, 4, ['Ethnicity', 'Region'])).toBe(
+      'merged from Ethnicity, Region · 4 values changed',
+    );
+  });
+
+  it('explains the column count in the summary', () => {
+    expect(columnsHint(0, 0, 0)).toBe('Every column is exported');
+    expect(columnsHint(0, 0, 2)).toBe('2 not exported');
+    expect(columnsHint(2, 1, 0)).toBe('2 merged into 1 column');
+    expect(columnsHint(5, 2, 1)).toBe('5 merged into 2 columns · 1 not exported');
   });
 });
 

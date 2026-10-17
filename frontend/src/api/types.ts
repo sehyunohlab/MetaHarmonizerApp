@@ -185,7 +185,7 @@ export interface Paginated<T> {
 
 /* Export preview — harmonized CSV vs. original upload */
 
-export type ExportColumnAction = 'renamed' | 'matched' | 'kept' | 'dropped';
+export type ExportColumnAction = 'renamed' | 'matched' | 'merged' | 'kept' | 'dropped';
 export type ExportMappingStatus = 'accepted' | 'pending' | 'rejected' | 'unmapped';
 export type ExportDropReason = 'no_target' | 'duplicate_target' | 'name_conflict';
 /** Why a cell differs: ontology term rewrite, or spreadsheet formula escape. */
@@ -197,6 +197,8 @@ export interface ExportPreviewSummary {
     columns_after: number;
     renamed: number;
     matched: number;
+    /** Uploaded columns merged with others into one exported column. */
+    merged: number;
     kept: number;
     dropped: number;
     /** Exported columns whose mapping is still awaiting review. */

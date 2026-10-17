@@ -1,12 +1,14 @@
-"""Every export picks the same source column for a schema field.
+"""Every export fills a schema field from the same source columns.
 
 The Harmonized CSV, the cBioPortal clinical file and the cBioPortal study
 folder (attributes and PATIENT_ID / SAMPLE_ID) share one rule:
 
 - a rejected or unmapped column never fills a schema field;
-- when several columns map to one field, a mapping a curator reviewed beats
-  one the engine accepted on its own, which beats a pending suggestion; then
-  the higher confidence wins, then the column that comes first in the upload,
+- every column mapped to a field fills it, in upload order, and their values
+  are merged;
+- an identifier field takes one column: a mapping a curator reviewed beats one
+  the engine accepted on its own, which beats a pending suggestion; then the
+  higher confidence wins, then the column that comes first in the upload,
   never the order the database happens to return mappings in.
 
 A rejected column is kept in the Harmonized CSV exactly as uploaded.
@@ -48,19 +50,23 @@ def _field(target: str) -> str:
     return target.upper().replace(" ", "_")
 
 
-def csv_sources(df: pd.DataFrame, mappings: list[dict]) -> dict[str, str]:
-    """Field → source column in the Harmonized CSV."""
+def csv_sources(df: pd.DataFrame, mappings: list[dict]) -> dict[str, tuple[str, ...]]:
+    """Field → source columns in the Harmonized CSV."""
     table = exporter.harmonize_table(df, df, mappings, {})
-    return {
-        _field(p.target): p.source for p in table.plan if p.action in ("renamed", "matched")
+    sources: dict[str, tuple[str, ...]] = {}
+    for p in table.plan:
+        if p.action in ("renamed", "matched", "merged"):
+            sources[_field(p.target)] = (*sources.get(_field(p.target), ()), p.source)
+    return sources
+
+
+def cbio_sources(df: pd.DataFrame, mappings: list[dict]) -> dict[str, tuple[str, ...]]:
+    """Field → source columns in the cBioPortal files (attributes and IDs)."""
+    sources = {
+        s["target"]: tuple(s["sources"]) for s in exporter._clinical_column_specs(mappings, df)
     }
-
-
-def cbio_sources(df: pd.DataFrame, mappings: list[dict]) -> dict[str, str]:
-    """Field → source column in the cBioPortal files (attributes and IDs)."""
-    sources = {s["target"]: s["raw"] for s in exporter._clinical_column_specs(mappings, df)}
     for id_field, candidates in ID_CANDIDATES.items():
-        sources[id_field] = exporter._id_raw_source(mappings, df, id_field, candidates)
+        sources[id_field] = (exporter._id_raw_source(mappings, df, id_field, candidates),)
     return sources
 
 
@@ -87,8 +93,8 @@ def test_a_rejected_mapping_never_supplies_the_cbioportal_sample_id(rejected):
         _m("Sample_Name", "sample_name", curator="sample_id", confidence=0.41),
     ]
 
-    assert csv_sources(df, mappings)["SAMPLE_ID"] == "Sample_Name"
-    assert cbio_sources(df, mappings)["SAMPLE_ID"] == "Sample_Name"
+    assert csv_sources(df, mappings)["SAMPLE_ID"] == ("Sample_Name",)
+    assert cbio_sources(df, mappings)["SAMPLE_ID"] == ("Sample_Name",)
 
 
 def test_a_rejected_only_id_mapping_falls_back_to_the_id_heuristic():
@@ -99,7 +105,7 @@ def test_a_rejected_only_id_mapping_falls_back_to_the_id_heuristic():
     ]
 
     assert "SAMPLE_ID" not in csv_sources(df, mappings)
-    assert cbio_sources(df, mappings)["SAMPLE_ID"] == "run_id"
+    assert cbio_sources(df, mappings)["SAMPLE_ID"] == ("run_id",)
 
 
 def test_the_study_folder_takes_sample_ids_from_the_accepted_column(monkeypatch):
@@ -136,50 +142,65 @@ def test_the_study_folder_takes_sample_ids_from_the_accepted_column(monkeypatch)
     assert [row[header.index("SAMPLE_ID")] for row in data] == ["S1", "S2"]
 
 
-def test_a_curator_accepted_column_beats_an_unreviewed_suggestion_in_every_export():
+def test_every_column_mapped_to_a_field_fills_it_in_every_export():
     df = pd.DataFrame({"Gender": ["F", "M"], "Sex_Guess": ["female", "female"]})
     mappings = [
         _m("Sex_Guess", "sex", "pending", confidence=0.99),
         _m("Gender", "sex", confidence=0.71),
     ]
 
-    assert csv_sources(df, mappings)["SEX"] == "Gender"
-    assert cbio_sources(df, mappings)["SEX"] == "Gender"
+    assert csv_sources(df, mappings)["SEX"] == ("Gender", "Sex_Guess")  # upload order
+    assert cbio_sources(df, mappings)["SEX"] == ("Gender", "Sex_Guess")
 
 
-def test_a_mapping_you_reviewed_beats_one_the_engine_accepted_on_its_own():
-    df = pd.DataFrame({"Tumor_Site": ["Uterus"], "Primary_Site": ["Endometrium"]})
+def test_for_an_identifier_a_mapping_you_reviewed_beats_one_the_engine_accepted():
+    df = pd.DataFrame({"Specimen": ["S1"], "Sample_Name": ["s-1"]})
     mappings = [  # highest confidence first, as the database returns them
-        _m("Tumor_Site", "body_site", confidence=0.97),  # auto-accepted by the engine
-        _m("Primary_Site", "body_site", confidence=0.6, reviewed=True),  # accepted by the curator
+        _m("Specimen", "sample_id", confidence=0.97),  # auto-accepted by the engine
+        _m("Sample_Name", "sample_id", confidence=0.6, reviewed=True),  # accepted by the curator
     ]
 
-    assert csv_sources(df, mappings)["BODY_SITE"] == "Primary_Site"
-    assert cbio_sources(df, mappings)["BODY_SITE"] == "Primary_Site"
+    assert csv_sources(df, mappings)["SAMPLE_ID"] == ("Sample_Name",)
+    assert cbio_sources(df, mappings)["SAMPLE_ID"] == ("Sample_Name",)
+
+
+def test_for_an_identifier_a_curator_accepted_column_beats_an_unreviewed_suggestion():
+    df = pd.DataFrame({"Subject": ["P1"], "Patient_Guess": ["p1"]})
+    mappings = [
+        _m("Patient_Guess", "patient_id", "pending", confidence=0.99),
+        _m("Subject", "patient_id", confidence=0.71),
+    ]
+
+    assert csv_sources(df, mappings)["PATIENT_ID"] == ("Subject",)
+    assert cbio_sources(df, mappings)["PATIENT_ID"] == ("Subject",)
 
 
 @pytest.mark.parametrize("database_order", ["upload-order", "reversed"])
-def test_a_tie_goes_to_the_first_column_in_the_upload(database_order):
-    df = pd.DataFrame({"Gender": ["F"], "Sex_Reported": ["Female"]})
-    mappings = [_m("Gender", "sex", confidence=0.95), _m("Sex_Reported", "sex", confidence=0.95)]
+def test_for_an_identifier_a_tie_goes_to_the_first_column_in_the_upload(database_order):
+    df = pd.DataFrame({"Subject": ["P1"], "Subject_Code": ["P-1"]})
+    mappings = [
+        _m("Subject", "subject_id", confidence=0.95),
+        _m("Subject_Code", "subject_id", confidence=0.95),
+    ]
     if database_order == "reversed":
         mappings.reverse()  # the database returns rows with equal confidence in no fixed order
 
-    assert csv_sources(df, mappings)["SEX"] == "Gender"
-    assert cbio_sources(df, mappings)["SEX"] == "Gender"
+    assert csv_sources(df, mappings)["SUBJECT_ID"] == ("Subject",)
+    assert cbio_sources(df, mappings)["SUBJECT_ID"] == ("Subject",)
 
 
 def test_cbioportal_attributes_follow_the_upload_column_order():
-    df = pd.DataFrame({"age": ["1"], "sex": ["F"], "site": ["lung"]})
+    df = pd.DataFrame({"age": ["1"], "sex": ["F"], "site": ["lung"], "site2": ["skin"]})
     mappings = [  # highest confidence first, as the database returns them
-        _m("site", "body_site", confidence=0.99),
+        _m("site2", "body_site", confidence=0.99),
+        _m("site", "body_site", confidence=0.95),
         _m("sex", "sex", confidence=0.9),
         _m("age", "age", confidence=0.8),
     ]
 
     specs = exporter._clinical_column_specs(mappings, df)
 
-    assert [s["raw"] for s in specs] == ["age", "sex", "site"]
+    assert [s["sources"] for s in specs] == [["age"], ["sex"], ["site", "site2"]]
 
 
 def test_a_rejected_column_is_kept_exactly_as_uploaded():
@@ -231,7 +252,7 @@ def test_cbioportal_and_the_harmonized_csv_choose_the_same_columns():
             expected = csv.get(field)
             if expected is None and field in ID_CANDIDATES:
                 # No accepted or pending mapping: cBioPortal guesses the ID column.
-                expected = exporter._find_id_column(df, ID_CANDIDATES[field])
+                expected = (exporter._find_id_column(df, ID_CANDIDATES[field]),)
             if cbio.get(field) != expected:
                 disagreements.append((case, field, expected, cbio.get(field)))
 

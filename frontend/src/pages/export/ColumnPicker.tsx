@@ -18,6 +18,7 @@ export function ColumnPicker({
   selected,
   changed,
   renamedFrom,
+  mergedFrom,
   changedCells,
   onChange,
 }: {
@@ -25,6 +26,7 @@ export function ColumnPicker({
   selected: string[] | null;
   changed: ReadonlySet<string>;
   renamedFrom: Record<string, string>;
+  mergedFrom: Record<string, string[]>;
   changedCells: Record<string, number>;
   onChange: (next: string[] | null) => void;
 }) {
@@ -38,9 +40,10 @@ export function ColumnPicker({
   const chosen = new Set(selected ?? columns);
   const changedList = columns.filter((name) => changed.has(name));
   const needle = search.trim().toLowerCase();
+  const uploadedNames = (name: string) => [renamedFrom[name] ?? '', ...(mergedFrom[name] ?? [])];
   const shown = needle
-    ? columns.filter(
-        (name) => name.toLowerCase().includes(needle) || (renamedFrom[name] ?? '').toLowerCase().includes(needle),
+    ? columns.filter((name) =>
+        [name, ...uploadedNames(name)].some((candidate) => candidate.toLowerCase().includes(needle)),
       )
     : columns;
 
@@ -127,7 +130,7 @@ export function ColumnPicker({
               type="button"
               className="btn-ghost btn-sm px-2"
               disabled={changedList.length === 0}
-              title="Columns that were renamed or have changed values"
+              title="Columns that were renamed, merged, or have changed values"
               onClick={() => choose(changedList)}
             >
               Changed <Count value={changedList.length} />
@@ -170,7 +173,7 @@ export function ColumnPicker({
                           id={`${inputId}-change`}
                           className="block truncate text-[11px] text-slate-500 dark:text-slate-400"
                         >
-                          {describeColumnChange(renamedFrom[name], changedCells[name] ?? 0)}
+                          {describeColumnChange(renamedFrom[name], changedCells[name] ?? 0, mergedFrom[name])}
                         </span>
                       </span>
                     </li>

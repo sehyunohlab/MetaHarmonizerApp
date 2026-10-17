@@ -216,32 +216,40 @@ Harmonized CSV with your original upload. Previewing is read-only: it does not
 export anything or mark the study as exported.
 
 - The summary shows the row count (rows are never added, removed, or
-  reordered), how many columns are exported, renamed, or left out, and how many
-  cell values change.
-- A column is left out of the Harmonized CSV, and counted as not exported in
-  the summary, when it is not mapped to a schema field, or when another column
-  already maps to the same field. A CSV cannot repeat a column name, so one
-  column per field is kept: a mapping you accepted or edited wins over one the
-  engine accepted on its own, which wins over an unreviewed suggestion; then
-  higher confidence; then the column that comes first in your file. The
-  cBioPortal files use the same column. To export the other column instead,
-  reject or edit one of the two mappings.
+  reordered), how many columns are exported, renamed, merged, or left out, and
+  how many cell values change.
+- Columns mapped to the same field are merged into one column of that name,
+  placed where the first of them is in your file, the way the lab's curated
+  metadata consolidates them. Each row lists those columns' values in file
+  order, each replaced by its accepted ontology term, separated by `<;>` (a
+  value may itself contain `;`). Blank and missing values are skipped and a
+  value repeated across the columns is listed once, so `F` and `female` that
+  both became `Female` give `Female`. To leave a column out of the merge,
+  reject or edit its mapping.
+- An identifier field (`PATIENT_ID`, `SAMPLE_ID`, or a field named like
+  `subject_id` or `sample_id`) holds one value per row, so only one of the
+  columns mapped to it is exported: a mapping you accepted or edited wins over
+  one the engine accepted on its own, which wins over an unreviewed suggestion;
+  then higher confidence; then the column that comes first in your file. The
+  others are left out and counted as not exported, like a column that is not
+  mapped to a schema field. The cBioPortal files use the same columns.
 - A column whose mapping you **rejected** is never used for a schema field. The
   Harmonized CSV keeps it unchanged under its own name, unless a mapped column
   is already exported under that name. The cBioPortal files leave it out.
 - **Harmonized metadata** lists every row and every exported column of the
   Harmonized CSV. A renamed column's header is highlighted, with its uploaded
-  name struck through beneath the schema field name. Changed cells show the
+  name struck through beneath the schema field name; a merged column's header
+  lists the columns merged into it. Changed cells show the
   exported value with the uploaded value struck through beneath it, colored by
   cause: an accepted ontology term, or an
   apostrophe added so spreadsheets treat formula-like text (such as values
   starting with `=`, `+`, `-`, or `@`, but not plain numbers like `-5`) as
   text. **Columns** opens a checklist of every exported column, each marked
-  as renamed, with its number of changed values, or unchanged. Show any
-  combination of columns, or pick **All**, **Changed** (renamed or with a
-  changed value), or **None**; search finds a column by its export or uploaded
-  name. **Changed rows only** keeps rows with a changed value in the shown
-  columns, and shows how many there are.
+  as renamed, merged, with its number of changed values, or unchanged. Show any
+  combination of columns, or pick **All**, **Changed** (renamed, merged, or with
+  a changed value), or **None**; search finds a column by its export or
+  uploaded name. **Changed rows only** keeps rows with a changed value in the
+  shown columns, and shows how many there are.
 - A warning appears when exported columns still use unreviewed mapping
   suggestions; review them first so the field names are final.
 
@@ -258,7 +266,9 @@ completing the study:
   format accepts for a yes/no attribute. A column whose values became ontology
   terms, and attributes cBioPortal defines as text (such as `SEX` and
   `SAMPLE_TYPE`), are declared as text even when the uploaded values are
-  numbers or yes/no. cBioPortal reads one line per row and
+  numbers or yes/no. Merged attributes hold the same `<;>`-separated values as
+  the Harmonized CSV, and are declared as text when a cell holds more than one
+  number or yes/no value. cBioPortal reads one line per row and
   does not unquote values, so a line break or tab inside a value is written as a
   space and values are never wrapped in quotes.
 - **cBioPortal Study Folder (ZIP)** contains metadata and clinical data files

@@ -105,6 +105,18 @@ versioning once a stable `1.x` release is declared.
   counts and keeps rows changed in the shown columns. The preview API's
   `column` parameter can be repeated, and `rows.changed_total` counts the rows
   changed in those columns.
+- Columns mapped to the same schema field are merged into one column, as the
+  lab's curated metadata consolidates them, instead of exporting one and
+  leaving the others out. Each row holds those columns' values in upload
+  order, each replaced by its accepted ontology term, separated by `<;>`, with
+  blank values skipped and repeats listed once; MetaHarmonizer's own example
+  data (`examples/data/query_with_selected_fields_for_bie.csv`) uses this
+  format. The Harmonized CSV and the cBioPortal files merge alike, and a
+  merged cBioPortal attribute is declared STRING when its cells hold several
+  numbers or yes/no values; `validateData.py` accepts the result. Identifier
+  fields (PATIENT_ID, SAMPLE_ID, and fields named like `subject_id` or
+  `sample_id`) still take one column, chosen by the existing rule. The export
+  preview marks merged columns, and its summary counts them.
 
 ## [0.1.0] - 2026-08-19
 
