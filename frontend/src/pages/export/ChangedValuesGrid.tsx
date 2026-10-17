@@ -74,7 +74,7 @@ export function ChangedValuesGrid({
     <Card>
       <CardHeader
         icon={<Rows3 className="h-4 w-4" />}
-        title="Exported values"
+        title="Harmonized metadata"
         description="Every exported value next to your upload. Renamed columns and changed cells show the uploaded name or value struck through."
         action={fetching ? <Spinner className="h-4 w-4 text-slate-400" /> : undefined}
       />
@@ -197,7 +197,7 @@ export function ChangedValuesGrid({
         <div
           tabIndex={0}
           role="region"
-          aria-label="Exported values table"
+          aria-label="Harmonized metadata table"
           className={cn(
             'relative max-h-[36rem] overflow-auto transition-opacity focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500/40',
             fetching && 'opacity-60',

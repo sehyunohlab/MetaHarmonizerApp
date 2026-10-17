@@ -154,12 +154,22 @@ test.describe('authenticated journey', () => {
       await page.goto(`/export/${accepted.study_id}?view=preview`);
 
       await expect(page.getByRole('tab', { name: /Preview changes/ })).toHaveAttribute('aria-selected', 'true');
-      await expect(page.getByRole('heading', { name: 'Column changes', exact: true })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Exported values', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Harmonized metadata', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Column changes', exact: true })).toHaveCount(0);
       await expect(page.getByRole('checkbox', { name: 'Changed rows only' })).not.toBeChecked();
       await expect(page.getByRole('checkbox', { name: 'Changed columns only' })).not.toBeChecked();
-      await expect(page.getByRole('cell', { name: 'participant_id', exact: true }).first()).toBeVisible();
-      await expect(page.getByRole('cell', { name: 'sex', exact: true }).first()).toBeVisible();
+      // The grid lists every exported column under its export name, and every row.
+      const grid = page.getByRole('region', { name: 'Harmonized metadata table' });
+      const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      for (const name of body.rows.columns as string[]) {
+        await expect(
+          grid.getByRole('columnheader', { name: new RegExp(`^${escape(name)}(\\s*, renamed from .+)?$`) }),
+        ).toBeVisible();
+      }
+      await expect(grid.getByRole('rowheader')).toHaveCount(body.rows.total);
+      for (const value of body.rows.items[0].values as string[]) {
+        await expect(grid.getByRole('cell', { name: value, exact: true }).first()).toBeVisible();
+      }
 
       // Switching back to Downloads keeps the study and drops the view param.
       await page.getByRole('tab', { name: /Downloads/ }).click();

@@ -5,10 +5,6 @@ import {
   changedColumnNames,
   changesByColumn,
   clampOffset,
-  columnFilterCounts,
-  distinctValueChanges,
-  dropExplanation,
-  filterColumns,
   formatPercent,
   pluralize,
   renamedFrom,
@@ -35,49 +31,6 @@ const columns: ExportColumnChange[] = [
   column({ source: 'bmi', target: 'bmi', action: 'kept', mapping_status: 'rejected' }),
   column({ source: 'notes', target: null, action: 'dropped', mapping_status: 'unmapped', drop_reason: 'no_target' }),
 ];
-
-describe('column filters', () => {
-  it('counts each tab', () => {
-    expect(columnFilterCounts(columns)).toEqual({ all: 4, renamed: 1, unchanged: 2, dropped: 1 });
-  });
-
-  it('filters by tab and searches source and export names', () => {
-    expect(filterColumns(columns, 'unchanged', '').map((c) => c.source)).toEqual(['country', 'bmi']);
-    expect(filterColumns(columns, 'all', 'SEX').map((c) => c.source)).toEqual(['gender']);
-    expect(filterColumns(columns, 'dropped', 'note').map((c) => c.source)).toEqual(['notes']);
-    expect(filterColumns(columns, 'renamed', 'zzz')).toEqual([]);
-  });
-});
-
-describe('dropExplanation', () => {
-  const gender = column({ source: 'Gender', target: 'sex' });
-  const ageAtDx = column({ source: 'Age_at_Dx', target: 'age' });
-  const dropped = (overrides: Partial<ExportColumnChange>) =>
-    column({ target: null, action: 'dropped', ...overrides });
-
-  it('names the column that took the field', () => {
-    const duplicate = dropped({ source: 'Sex_Reported', drop_reason: 'duplicate_target', conflicts_with: 'Gender' });
-    expect(dropExplanation(duplicate, [gender, duplicate])).toBe('Gender already maps to sex');
-  });
-
-  it('names the column exported under the same name', () => {
-    const conflict = dropped({
-      source: 'age',
-      mapping_status: 'rejected',
-      drop_reason: 'name_conflict',
-      conflicts_with: 'Age_at_Dx',
-    });
-    expect(dropExplanation(conflict, [ageAtDx, conflict])).toBe('Age_at_Dx is exported as age');
-  });
-
-  it('falls back to the generic reason', () => {
-    const unmapped = dropped({ source: 'Notes', mapping_status: 'unmapped', drop_reason: 'no_target' });
-    expect(dropExplanation(unmapped, [unmapped])).toBe('Not mapped to a schema field');
-    const orphan = dropped({ source: 'x', drop_reason: 'duplicate_target', conflicts_with: 'missing' });
-    expect(dropExplanation(orphan, [orphan])).toBe('Another column already maps to the same field');
-    expect(dropExplanation(gender, [gender])).toBe('');
-  });
-});
 
 describe('formatPercent', () => {
   it('formats compact shares', () => {
@@ -134,17 +87,6 @@ describe('grid helpers', () => {
     const shown = visibleColumnIndexes(gridNames, changedColumnNames(study), { changedOnly: true, focus: null });
 
     expect(shown.map((index) => gridNames[index])).toEqual([...renamed.map((c) => c.target), 'site']);
-  });
-
-  it('counts distinct value changes, listed or not', () => {
-    const changes = Array.from({ length: 30 }, (_, i) => ({
-      before: `value ${i}`,
-      after: `Term ${i}`,
-      count: 2,
-      reason: 'ontology' as const,
-    }));
-    expect(distinctValueChanges(column({ value_changes: changes }))).toBe(30);
-    expect(distinctValueChanges(column({ value_changes: changes.slice(0, 1), more_value_changes: 4 }))).toBe(5);
   });
 
   it('indexes row changes by column', () => {
