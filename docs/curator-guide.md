@@ -239,7 +239,8 @@ export anything or mark the study as exported.
 - **Harmonized metadata** lists every row and every exported column of the
   Harmonized CSV. A renamed column's header is highlighted, with its uploaded
   name struck through beneath the schema field name; a merged column's header
-  lists the columns merged into it. Changed cells show the
+  lists the columns merged into it, or past three the first two and how many
+  more (hover over the header for all of them). Changed cells show the
   exported value with the uploaded value struck through beneath it, colored by
   cause: an accepted ontology term, or an
   apostrophe added so spreadsheets treat formula-like text (such as values

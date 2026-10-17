@@ -9,6 +9,8 @@ import {
   describeColumnChange,
   formatPercent,
   mergedFrom,
+  mergedLabel,
+  mergedPhrase,
   normalizeSelection,
   pluralize,
   renamedFrom,
@@ -139,8 +141,20 @@ describe('grid helpers', () => {
     expect(changedColumnNames(study)).toEqual(new Set(['race', 'sample_id']));
     expect(changedCellsByTarget(study)).toEqual({ race: 4, sample_id: 0, country: 0 });
     expect(describeColumnChange(undefined, 4, ['Ethnicity', 'Region'])).toBe(
-      'merged from Ethnicity, Region · 4 values changed',
+      'merged from Ethnicity and Region · 4 values changed',
     );
+  });
+
+  it('keeps a long merge to one short line', () => {
+    const names = Array.from({ length: 18 }, (_, i) => `col_${i}`);
+    expect(mergedLabel(['Gender', 'Sex'])).toBe('Gender + Sex');
+    expect(mergedLabel(['a', 'b', 'c'])).toBe('a + b + c');
+    expect(mergedLabel(['a', 'b', 'c', 'd'])).toBe('a + b + 2 more');
+    expect(mergedLabel(names)).toBe('col_0 + col_1 + 16 more');
+    expect(mergedPhrase(['Gender', 'Sex'])).toBe('Gender and Sex');
+    expect(mergedPhrase(['a', 'b', 'c'])).toBe('a, b and c');
+    expect(mergedPhrase(names)).toBe('18 columns: col_0, col_1 and 16 more');
+    expect(describeColumnChange(undefined, 0, names)).toBe('merged from 18 columns: col_0, col_1 and 16 more');
   });
 
   it('explains the column count in the summary', () => {

@@ -55,6 +55,26 @@ export function selectionLabel(selected: readonly string[] | null, total: number
   return `${selected.length.toLocaleString()} of ${total.toLocaleString()}`;
 }
 
+/** Uploaded names shown before a long merge is summarized as "and N more". */
+const SHOWN_MERGED_NAMES = 2;
+
+/** The columns merged into one, short enough for a column header:
+ *  "a + b + c", or "a + b + 16 more" past three. */
+export function mergedLabel(names: readonly string[]): string {
+  if (names.length <= SHOWN_MERGED_NAMES + 1) return names.join(' + ');
+  return `${names.slice(0, SHOWN_MERGED_NAMES).join(' + ')} + ${names.length - SHOWN_MERGED_NAMES} more`;
+}
+
+/** The columns merged into one, as words: "a and b", "a, b and c", or
+ *  "18 columns: a, b and 16 more". */
+export function mergedPhrase(names: readonly string[]): string {
+  if (names.length <= SHOWN_MERGED_NAMES + 1) {
+    return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  }
+  const shown = names.slice(0, SHOWN_MERGED_NAMES).join(', ');
+  return `${names.length.toLocaleString()} columns: ${shown} and ${names.length - SHOWN_MERGED_NAMES} more`;
+}
+
 /** How an export column differs from the upload, for the column picker. */
 export function describeColumnChange(
   renamedFrom: string | undefined,
@@ -63,7 +83,7 @@ export function describeColumnChange(
 ): string {
   const parts = [
     ...(renamedFrom ? [`renamed from ${renamedFrom}`] : []),
-    ...(mergedFrom.length > 0 ? [`merged from ${mergedFrom.join(', ')}`] : []),
+    ...(mergedFrom.length > 0 ? [`merged from ${mergedPhrase(mergedFrom)}`] : []),
     ...(changedCells > 0 ? [`${pluralize(changedCells, 'value')} changed`] : []),
   ];
   return parts.length > 0 ? parts.join(' · ') : 'unchanged';
