@@ -227,6 +227,14 @@ stays unchanged. When upstream's `KnowledgeDb` (FAISS + SQLite) is
 wired through `map_values`, those tables will be retired — see
 proposal Section 1.4.4.
 
+Every code in them must be the code of that term in its ontology:
+`python -m scripts.verify_ontology_codes --write` checks each against
+NCI EVS (NCIt) and OLS4 (UBERON, HANCESTRO) and records the names it
+found in `data/schema/ontology_code_labels.json`, which
+`tests/unit/test_ontology_codes.py` checks offline. Run it after adding
+or changing a code. Age groups and ancestry follow the lab's cBioPortal
+data dictionary (OmicsMLRepoData `inst/extdata/cBioPortal_data_dictionary.csv`).
+
 **Q. Why two adapters instead of one?**
 
 - `metaharmonizer` is what runs in production and dev.

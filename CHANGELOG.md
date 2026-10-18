@@ -138,6 +138,18 @@ versioning once a stable `1.x` release is declared.
   files, where every merged column is one a curator assigned. An unreviewed
   suggestion is no longer merged into a field that has accepted columns; a
   field with none still uses its best suggestion.
+- Fixed ontology codes that named other concepts. In the dictionary used for
+  values the ontology engine does not map (sex, country, ancestry, age group,
+  specimen and sample type, and a few diseases), and for the id filled in when a
+  curator edits a term, 60 entries had another concept's code: United States
+  and United Kingdom were swapped, Japan had Kenya's code, Bone Marrow Aspirate
+  had Human Chromosome Y's, Elderly had a testicular tumor's. Each code is now
+  its term's code in NCIt (NCI EVS 26.09d) or HANCESTRO (OLS4), and age groups
+  and ancestry follow the lab's cBioPortal data dictionary (its six age groups
+  and their codes; ancestry as the children of `HANCESTRO:0004`). A migration
+  corrects stored mappings, curator edits and remembered decisions that used an
+  old code. `python -m scripts.verify_ontology_codes` checks every code against
+  its ontology, and a test fails if one is not its term's.
 
 ## [0.1.0] - 2026-08-19
 

@@ -1,10 +1,11 @@
 {
   "age_group": [
+    "Newborn",
+    "Infant",
+    "Child",
     "Adolescent",
     "Adult",
-    "Children 2-11 Years Old",
-    "Elderly",
-    "Infant"
+    "Elderly"
   ],
   "ancestry_details": [
     "Admixed Ancestry",
