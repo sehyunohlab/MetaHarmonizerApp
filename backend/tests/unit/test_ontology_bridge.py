@@ -92,6 +92,26 @@ def test_normalize_engine_rows():
     assert rows[1]["ontology_term"] is None
 
 
+def test_normalize_engine_rows_keeps_one_row_per_query():
+    # The engine repeats a query's row when queries normalize alike
+    # (BLADDER CANCER / BLADDER_CANCER); a study must get one row per value.
+    frame = pd.DataFrame(
+        [
+            {"query": "BLADDER CANCER", "match1": "Bladder Carcinoma", "match1_score": 0.91},
+            {"query": "BLADDER_CANCER", "match1": "Bladder Carcinoma", "match1_score": 0.91},
+            {"query": "BLADDER CANCER", "match1": "Bladder Carcinoma", "match1_score": 0.91},
+            {"query": "BLADDER_CANCER", "match1": "Bladder Neoplasm", "match1_score": 0.95},
+        ]
+    )
+
+    rows = _ontology._normalize_engine_rows("disease", frame)
+
+    assert [(r["raw_value"], r["ontology_term"]) for r in rows] == [
+        ("BLADDER CANCER", "Bladder Carcinoma"),
+        ("BLADDER_CANCER", "Bladder Neoplasm"),
+    ]
+
+
 def test_normalize_engine_rows_enriches_code_from_corpus(monkeypatch):
     # OntoMapEngine.run() emits only the matched *label*, no code column. When
     # category/source are known the adapter recovers the code from the corpus

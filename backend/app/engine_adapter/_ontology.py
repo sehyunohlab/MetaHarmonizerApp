@@ -173,14 +173,18 @@ def _normalize_engine_rows(
     category: str | None = None,
     source: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Map an ``OntoMapEngine.run()`` frame to our ontology DTO rows.
+    """Map an ``OntoMapEngine.run()`` frame to our ontology DTO rows, one per
+    query.
 
     Defensive about column names so an upstream rename degrades to a
     lower-confidence row rather than crashing. When the engine supplies a label
     but no code (its normal behaviour — the output frame has no id column) and
     ``category``/``source`` are known, the code is recovered from the corpus.
+    The engine repeats a query's row when several queries normalize to the
+    same text (``BLADDER CANCER`` and ``BLADDER_CANCER``); the best-scoring
+    row is kept.
     """
-    rows: list[dict[str, Any]] = []
+    rows: dict[str, dict[str, Any]] = {}
     records = result.to_dict(orient="records") if result is not None else []
     label_to_id: dict[str, str] | None = None
     for raw in records:
@@ -202,17 +206,18 @@ def _normalize_engine_rows(
                 label_to_id = _corpus_label_to_id(category, source)
             ont_id = label_to_id.get(str(term).strip().lower())
         score = _to_score(raw.get("match1_score"))
-        rows.append(
-            {
-                "field_name": field_name,
-                "raw_value": str(query),
-                "ontology_term": None if term_missing else str(term),
-                "ontology_id": None if ont_id is None else str(ont_id),
-                "confidence_score": round(score, 4),
-                "status": "accepted" if score >= _auto_accept_threshold() else "pending",
-            }
-        )
-    return rows
+        kept = rows.get(str(query))
+        if kept is not None and kept["confidence_score"] >= round(score, 4):
+            continue
+        rows[str(query)] = {
+            "field_name": field_name,
+            "raw_value": str(query),
+            "ontology_term": None if term_missing else str(term),
+            "ontology_id": None if ont_id is None else str(ont_id),
+            "confidence_score": round(score, 4),
+            "status": "accepted" if score >= _auto_accept_threshold() else "pending",
+        }
+    return list(rows.values())
 
 
 def map_values_via_engine(
