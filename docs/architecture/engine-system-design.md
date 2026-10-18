@@ -153,7 +153,7 @@ Scores are clamped to `[0,1]`; the top match plus up to 4 alternatives are retur
 | `protocol.py` | `EngineProtocol` — the contract (schema/values/LLM/pre_warm/health). |
 | `metaharmonizer_impl.py` | Real adapter. Only importer of the wheel. Translates upstream `match1..5`/`stage`/`method` → dashboard rows; resolves target schema; merges admin alias uploads. |
 | `mock_impl.py` | Deterministic, dependency-free engine for tests/CI/demo. |
-| `_schema_registry.py` | Resolves the curator-selected target schema (GDC / cBioPortal / cMD presets or admin-uploaded versions). |
+| `_schema_registry.py` | Resolves the curator-selected target schema (the lab's curated cBioPortal vocabulary by default, cBioPortal attributes, GDC, cMD, or admin-uploaded versions). |
 | `_ontology.py` | Routes NCIt-disease / UBERON-bodysite / NCIt-treatment through `OntoMapEngine`; dictionary fallback for the rest. |
 | `_perf.py` | Shared-model + persistent NCI-EVS cache patches; `warm_model()`, `save_nci_cache()`. |
 | `schema_dicts.py`, `types.py` | Curated dictionaries; typed DTOs (`EngineHealth`). |

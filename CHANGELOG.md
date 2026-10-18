@@ -150,6 +150,21 @@ versioning once a stable `1.x` release is declared.
   corrects stored mappings, curator edits and remembered decisions that used an
   old code. `python -m scripts.verify_ontology_codes` checks every code against
   its ontology, and a test fails if one is not its term's.
+- Schema mapping now targets the lab's curated cBioPortal vocabulary by default
+  (OmicsMLRepoData's cBioPortal data dictionary, 44 fields such as `body_site`,
+  `disease_type` and `sex`), the vocabulary of the lab's harmonized metadata.
+  The previous default, cBioPortal's own clinical attribute IDs (`AGE`,
+  `OS_STATUS`, `STATUS`, `AGENT`, …), shared none of the 42 fields of the lab's
+  schema-mapping ground truth (MetaHarmonizer_Test_Data, 17 cBioPortal studies):
+  on those studies the engine's first suggestion matched the lab 5.4% of the
+  time, against 76.2% now. It stays available as **cBioPortal clinical
+  attributes**. The vocabulary is refreshed from the lab's April 2026 dictionary
+  (`disease_metastasic_site` is now `disease_metastatic_site`) and lists the
+  lab's allowed values for value-based matching;
+  `python -m scripts.refresh_lab_dictionary` regenerates it from the lab's
+  current dictionary. The cBioPortal files write the lab's `patientId` and
+  `sampleId` as `PATIENT_ID` and `SAMPLE_ID`, and on-demand LLM suggestions use
+  the study's target schema instead of the engine's built-in cBioPortal preset.
 
 ## [0.1.0] - 2026-08-19
 

@@ -28,8 +28,8 @@ class _FakeEngine:
         self.error = error
         self.calls: list[tuple[str, str]] = []
 
-    def llm_match(self, csv_path: str, raw_column: str) -> list[dict]:
-        self.calls.append((csv_path, raw_column))
+    def llm_match(self, csv_path: str, raw_column: str, target_schema: str | None = None) -> list[dict]:
+        self.calls.append((csv_path, raw_column, target_schema))
         if self.error:
             raise self.error
         return [{"field": "sex", "score": 0.9}]
@@ -40,9 +40,9 @@ def test_llm_suggestions_read_the_stored_study_file(monkeypatch) -> None:
     monkeypatch.setattr(storage_mod, "get_storage", lambda: storage)
     monkeypatch.setattr(engine_adapter, "get_engine", lambda: engine)
 
-    assert llm_rematch.llm_suggestions("study.csv", "SEX") == [{"field": "sex", "score": 0.9}]
+    assert llm_rematch.llm_suggestions("study.csv", "SEX", "gdc") == [{"field": "sex", "score": 0.9}]
     assert storage.keys == ["study.csv"]
-    assert engine.calls == [(str(Path("local") / "study.csv"), "SEX")]
+    assert engine.calls == [(str(Path("local") / "study.csv"), "SEX", "gdc")]
 
 
 def test_llm_runtime_failure_is_reported_as_unavailable(monkeypatch) -> None:

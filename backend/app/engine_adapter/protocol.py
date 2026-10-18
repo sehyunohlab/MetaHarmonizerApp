@@ -76,9 +76,12 @@ class EngineProtocol(Protocol):
     # ------------------------------------------------------------------
     # On-demand LLM (Stage 4) — single column
     # ------------------------------------------------------------------
-    def llm_match(self, csv_path: str, raw_column: str) -> list[dict[str, Any]]:
+    def llm_match(
+        self, csv_path: str, raw_column: str, target_schema: str | None = None
+    ) -> list[dict[str, Any]]:
         """
-        Ask the engine's LLM matcher for suggestions on one column.
+        Ask the engine's LLM matcher for suggestions on one column, among the
+        fields of ``target_schema`` (the study's; the default when ``None``).
 
         Returns dicts with keys ``field``, ``confidence``, ``reasoning``.
         May raise ``RuntimeError`` if the LLM is not configured

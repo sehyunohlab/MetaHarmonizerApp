@@ -65,9 +65,20 @@ class MetaHarmonizerAdapter:
             mode = "auto" if os.getenv("GEMINI_API_KEY") else "manual"
         self._mode = mode
         self._top_k = top_k
-        # Pin "cbio" (33-field cBioPortal preset); the engine's own default is
-        # "gdc" (736 fields). Override via ENGINE_TARGET_SCHEMA.
+        # The engine's bundled preset, used only when no registry schema is
+        # installed (see _schema_key); the engine's own default is "gdc".
         self._schema = os.getenv("ENGINE_TARGET_SCHEMA", "cbio")
+
+    def _schema_key(self, target_schema: str | None) -> str:
+        """The curator's chosen target schema if installed, else the installed
+        default (the lab's curated cBioPortal vocabulary), else the preset."""
+        from . import _schema_registry
+
+        if _schema_registry.is_valid(target_schema):
+            return str(target_schema)
+        if _schema_registry.available_schemas():
+            return _schema_registry.default_key()
+        return self._schema
 
     # ------------------------------------------------------------------
     def _alias_dict_path(self) -> str | None:
@@ -176,17 +187,7 @@ class MetaHarmonizerAdapter:
     ) -> list[dict[str, Any]]:
         if not csv_path:
             raise ValueError("metaharmonizer adapter requires csv_path")
-        from . import _schema_registry
-
-        # Resolve the curator's chosen target schema: an installed SchemaRegistry
-        # schema if valid, else the installed default, else the bundled preset.
-        if _schema_registry.is_valid(target_schema):
-            schema_key = target_schema
-        elif _schema_registry.available_schemas():
-            schema_key = _schema_registry.default_key()
-        else:
-            schema_key = self._schema
-        engine = self._engine_for(csv_path, schema_key)
+        engine = self._engine_for(csv_path, self._schema_key(target_schema))
         raw = engine.run_schema_mapping()
         # Persist new NCI EVS lookups so later studies reuse them.
         from . import _perf
@@ -228,14 +229,15 @@ class MetaHarmonizerAdapter:
         fallback_rows = run_ontology_mapping(raw_df, remaining) if remaining else []
         return engine_rows + fallback_rows
 
-    def llm_match(self, csv_path: str, raw_column: str) -> list[dict[str, Any]]:
+    def llm_match(
+        self, csv_path: str, raw_column: str, target_schema: str | None = None
+    ) -> list[dict[str, Any]]:
         if not os.getenv("GEMINI_API_KEY"):
             raise RuntimeError(
                 "GEMINI_API_KEY is not set. Add it to the backend .env to use "
                 "on-demand LLM matching."
             )
         pkg = _require_pkg()
-        from . import _schema_registry
 
         # engine >=0.4.0: LLMMatcher moved to the stage-4 matchers module.
         try:
@@ -244,8 +246,8 @@ class MetaHarmonizerAdapter:
             from metaharmonizer.models.schema_mapper.matchers.stage4_matchers import (
                 LLMMatcher,
             )
-        schema_key = getattr(self, "_schema", None) or _schema_registry.default_key()
-        engine = self._engine_for(csv_path, schema_key)
+        # Suggest fields of the schema the study was mapped against.
+        engine = self._engine_for(csv_path, self._schema_key(target_schema))
         matcher = LLMMatcher(engine)
         return [
             {"field": f, "confidence": round(float(s), 4), "reasoning": src}

@@ -80,7 +80,13 @@ Open **Upload**, select the file, and choose a run mode:
 - **Schema only** maps column names and skips value-to-ontology resolution.
 - **Ontology only** resolves values and skips schema mapping.
 
-For schema mapping, select the target standard shown by the application. For an
+For schema mapping, select the target standard shown by the application. The
+default is the lab's curated cBioPortal vocabulary (OmicsMLRepoData's
+cBioPortal data dictionary: `body_site`, `disease_type`, `sex`, `patientId`, and
+40 more), the fields of the lab's harmonized metadata and of its schema-mapping
+ground truth. **cBioPortal clinical attributes** maps instead to cBioPortal's own
+attribute IDs (`AGE`, `OS_STATUS`, …), and GDC and curatedMetagenomicData have
+their own vocabularies. For an
 ontology run, the optional column selector limits value resolution to the
 chosen columns; leaving it empty uses all eligible columns.
 

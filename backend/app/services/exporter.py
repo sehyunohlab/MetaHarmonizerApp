@@ -739,8 +739,9 @@ def _infer_dtype(series: pd.Series) -> str:
 
 
 def _cbio_id(field: str) -> str:
-    """cBioPortal attribute id for a schema field (``body site`` → ``BODY_SITE``)."""
-    return field.upper().replace(" ", "_")
+    """cBioPortal attribute id for a schema field: ``body site`` → ``BODY_SITE``,
+    and the lab vocabulary's camelCase ``patientId`` → ``PATIENT_ID``."""
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", field).upper().replace(" ", "_")
 
 
 def _clinical_column_specs(

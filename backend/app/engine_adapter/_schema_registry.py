@@ -23,12 +23,16 @@ _REGISTRY_DIR = Path(__file__).resolve().parents[2] / "data" / "schema" / "regis
 
 # Friendly labels + a stable display order for the known schemas.
 _LABELS: dict[str, str] = {
-    "cbioportal": "cBioPortal",
+    "omicsmlprepo_cbio": "cBioPortal curated (lab vocabulary)",
+    "cbioportal": "cBioPortal clinical attributes",
     "gdc": "GDC — cancer (CPTAC)",
     "cmd": "curatedMetagenomicData",
-    "omicsmlprepo_cbio": "OmicsMLRepo cBioPortal",
 }
-_ORDER = ["cbioportal", "gdc", "cmd", "omicsmlprepo_cbio"]
+_ORDER = ["omicsmlprepo_cbio", "cbioportal", "gdc", "cmd"]
+# The lab's curated cBioPortal vocabulary (OmicsMLRepoData's data dictionary,
+# refreshed by scripts/refresh_lab_dictionary.py): the fields of the lab's
+# harmonized metadata and of its SchemaMapper ground truth.
+_DEFAULT = "omicsmlprepo_cbio"
 
 _SUFFIX = "_target_attrs.csv"
 
@@ -67,10 +71,13 @@ def _discover() -> dict[str, dict]:
 
 
 def available_schemas() -> list[dict]:
-    """Public list (key, label, fields) for the picker — no filesystem paths."""
+    """Public list (key, label, fields) for the picker — no filesystem paths.
+    The default schema comes first."""
     found = _discover()
-    ordered = [found[k] for k in _ORDER if k in found]
-    ordered += [v for k, v in found.items() if k not in _ORDER]
+    first = default_key()
+    order = [first, *(k for k in _ORDER if k != first)]
+    ordered = [found[k] for k in order if k in found]
+    ordered += [v for k, v in found.items() if k not in order]
     return [{"key": s["key"], "label": s["label"], "fields": s["fields"]} for s in ordered]
 
 
@@ -83,14 +90,15 @@ def resolve(key: str | None) -> dict | None:
 
 def default_key() -> str:
     """Default schema when none is chosen: ``ENGINE_TARGET_SCHEMA`` if it names an
-    installed schema, else cBioPortal, else the first available."""
+    installed schema, else the lab's curated cBioPortal vocabulary, else the
+    first available."""
     env = os.getenv("ENGINE_TARGET_SCHEMA")
     if env and env in _discover():
         return env
-    if "cbioportal" in _discover():
-        return "cbioportal"
+    if _DEFAULT in _discover():
+        return _DEFAULT
     keys = list(_discover())
-    return keys[0] if keys else "cbioportal"
+    return keys[0] if keys else _DEFAULT
 
 
 def is_valid(key: str | None) -> bool:

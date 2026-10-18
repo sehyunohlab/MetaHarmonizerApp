@@ -30,7 +30,7 @@ classes:
     - cancer_type_detailed
     - country
     - curation_id
-    - disease_metastasic_site
+    - disease_metastatic_site
     - disease_metastasis
     - disease_type
     - histological_subtype
@@ -127,7 +127,7 @@ slots:
     range: string
     required: true
     identifier: true
-  disease_metastasic_site:
+  disease_metastatic_site:
     description: .nan
     range: string
   disease_metastasis:
