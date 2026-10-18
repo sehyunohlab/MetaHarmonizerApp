@@ -254,9 +254,10 @@ jobs:
         with:
           name: ${{ needs.decide.outputs.base_artifact }}
           path: ${{ runner.temp }}/kb-base
-          # Empty for this run's own checkpoint.
+          # Both empty for this run's own checkpoint: with a token, the action
+          # looks the artifact up in the run named by run-id.
           run-id: ${{ needs.decide.outputs.base_run != github.run_id && needs.decide.outputs.base_run || '' }}
-          github-token: ${{ github.token }}
+          github-token: ${{ needs.decide.outputs.base_run != github.run_id && github.token || '' }}
 
       - name: Restore the checkpoint
         id: restore
@@ -423,9 +424,10 @@ jobs:
         with:
           name: kb-fields-${{ needs.decide.outputs.fields_run }}
           path: ${{ runner.temp }}/kb-fields
-          # Empty for this run's own checkpoint.
+          # Both empty for this run's own checkpoint: with a token, the action
+          # looks the artifact up in the run named by run-id.
           run-id: ${{ needs.decide.outputs.fields_run != github.run_id && needs.decide.outputs.fields_run || '' }}
-          github-token: ${{ github.token }}
+          github-token: ${{ needs.decide.outputs.fields_run != github.run_id && github.token || '' }}
 
       - name: Restore the field-corpora checkpoint
         working-directory: backend
