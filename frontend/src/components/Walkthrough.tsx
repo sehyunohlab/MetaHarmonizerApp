@@ -231,7 +231,7 @@ function LearnMock() {
 function OntologyMock() {
   const rows: Array<[string, string, string]> = [
     ['Hepatocellular Carcinoma', 'HCC', 'NCIT:C3099'],
-    ['brain', 'Brain', 'NCIT:C12439'],
+    ['brain', 'Brain', 'UBERON:0000955'],
   ];
   return (
     <div className="space-y-2 text-xs">

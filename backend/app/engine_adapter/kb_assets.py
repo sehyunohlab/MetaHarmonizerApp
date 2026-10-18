@@ -11,11 +11,8 @@ REQUIRED_ONTOLOGY_TUPLES = (
     ("bodysite", "uberon"),
     ("treatment", "ncit"),
 )
-# Engine corpora the KB build also installs, used when present: NCIt body
-# parts, the engine's default ontology for body sites and the one the lab's
-# cBioPortal curation uses (99.9% of its body_site terms).
-OPTIONAL_ONTOLOGY_TUPLES = (("bodysite", "ncit"),)
-KB_ONTOLOGY_TUPLES = REQUIRED_ONTOLOGY_TUPLES + OPTIONAL_ONTOLOGY_TUPLES
+# The engine corpora the KB build installs.
+KB_ONTOLOGY_TUPLES = REQUIRED_ONTOLOGY_TUPLES
 REQUIRED_CORPUS_NAMES = tuple(
     f"{source}_{category}_corpus.csv" for category, source in REQUIRED_ONTOLOGY_TUPLES
 )

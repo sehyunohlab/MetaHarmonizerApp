@@ -14,8 +14,8 @@ extraction and verifies the installed assets afterward.
 ## What the KB holds
 
 - **The engine's own corpora**, routed by field name in any target schema:
-  NCIt Neoplasm (disease), NCIt Pharmacologic Substance (treatment), NCIt Body
-  Part and UBERON (body site), and EFO (phenotype, carried forward).
+  NCIt Neoplasm (disease), NCIt Pharmacologic Substance (treatment), UBERON
+  (body site), and EFO (phenotype, carried forward).
 - **Per-field corpora** of the target schemas' data dictionaries
   (`app/engine_adapter/_field_corpora.py`), the lab's design: each dictionary
   field's `dynamic.enum` roots (descendants or children) and listed ontology
