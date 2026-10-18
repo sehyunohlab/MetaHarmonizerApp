@@ -122,6 +122,32 @@ def test_merged_attributes_join_values_and_fall_back_to_string():
     ]
 
 
+def test_merged_attributes_use_the_field_separator_of_the_lab_dictionary():
+    raw_df, raw_text = _frames(
+        "patient,sample,design,design2,site,site2\n"
+        "P1,S1,cohort,longitudinal,lung,liver\n"
+    )
+    mappings = [
+        {"raw_column": "patient", "matched_field": "patientId", "status": "accepted"},
+        {"raw_column": "sample", "matched_field": "sampleId", "status": "accepted"},
+        {"raw_column": "design", "matched_field": "study_design", "status": "accepted"},
+        {"raw_column": "design2", "matched_field": "study_design", "status": "accepted"},
+        {"raw_column": "site", "matched_field": "body_site", "status": "accepted"},
+        {"raw_column": "site2", "matched_field": "body_site", "status": "accepted"},
+    ]
+    specs = exporter._clinical_column_specs(mappings, raw_df, {"study_design": ";", "body_site": "<;>"})
+    assert [(s["target"], s["separator"]) for s in specs] == [("STUDY_DESIGN", ";"), ("BODY_SITE", "<;>")]
+    cols = [
+        exporter._id_spec("PATIENT_ID", "patient", "Patient Identifier", "Unique patient identifier"),
+        exporter._id_spec("SAMPLE_ID", "sample", "Sample Identifier", "Unique sample identifier"),
+        *specs,
+    ]
+
+    lines = exporter._write_clinical_tsv(cols, raw_df, {}, raw_text).rstrip("\n").split("\n")
+
+    assert lines[5].split("\t") == ["P1", "S1", "cohort;longitudinal", "lung<;>liver"]
+
+
 def test_write_clinical_tsv_header_and_values():
     cols = [
         exporter._id_spec("PATIENT_ID", "subject", "Patient Identifier", "Unique patient identifier"),

@@ -91,8 +91,12 @@ async def test_harmonized_export_merges_columns_mapped_to_one_field(monkeypatch)
     async def _no_onto(_db, _sid):
         return []
 
+    async def _no_study(_db, _sid):
+        return None  # no schema version: the default target schema's separators
+
     monkeypatch.setattr(mappings_repo, "get_mappings", _get_mappings)
     monkeypatch.setattr(ontology_repo, "get_ontology_mappings", _no_onto)
+    monkeypatch.setattr(exporter.studies_repo, "get_study", _no_study)
 
     out = await exporter.export_harmonized_csv(db=None, study_id="s", raw_df=raw_df)
     lines = out.splitlines()
@@ -151,8 +155,12 @@ async def test_harmonized_export_uses_curator_override_and_preserves_rejected_ra
     async def _ontology(_db, _sid):
         return ontology
 
+    async def _no_study(_db, _sid):
+        return None
+
     monkeypatch.setattr(mappings_repo, "get_mappings", _mappings)
     monkeypatch.setattr(ontology_repo, "get_ontology_mappings", _ontology)
+    monkeypatch.setattr(exporter.studies_repo, "get_study", _no_study)
 
     out = await exporter.export_harmonized_csv(None, "study", raw_df)
     rows = list(csv.DictReader(io.StringIO(out)))

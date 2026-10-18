@@ -313,6 +313,59 @@ def test_each_term_of_a_row_is_listed_once_with_its_id():
     assert list(table.frame["curated_body_site_ontology_term_id"]) == ["NCIT:C12664<;>NCIT:C12767"]
 
 
+def test_a_field_the_lab_separates_with_a_semicolon_is_joined_with_one():
+    # The lab's published cBioPortal metadata (Zenodo 16458151):
+    # target_condition "Acute Lymphoblastic Leukemia;MLL Gene Rearrangement",
+    # ids "NCIT:C3167;NCIT:C122623"; its data dictionary gives ";" for it.
+    from app.services.exporter import FieldRewrites
+
+    text, typed = _frames(
+        "condition,condition_detail,design_a,design_b\n"
+        "ALL,MLL rearranged,cohort,longitudinal\n"
+        "ALL,,cohort,cohort\n"
+    )
+    condition = FieldRewrites()
+    for raw, term, term_id in [
+        ("ALL", "Acute Lymphoblastic Leukemia", "NCIT:C3167"),
+        ("MLL rearranged", "MLL Gene Rearrangement", "NCIT:C122623"),
+    ]:
+        condition[raw], condition.ids[raw] = term, term_id
+    mappings = [
+        _m("condition", "target_condition"),
+        _m("condition_detail", "target_condition"),
+        _m("design_a", "study_design"),
+        _m("design_b", "study_design"),
+    ]
+    separators = {"target_condition": ";", "study_design": ";"}
+
+    table = harmonize_table(text, typed, mappings, {"target_condition": condition}, separators)
+
+    assert list(table.frame["curated_target_condition"]) == [
+        "Acute Lymphoblastic Leukemia;MLL Gene Rearrangement",
+        "Acute Lymphoblastic Leukemia",
+    ]
+    assert list(table.frame["curated_target_condition_ontology_term_id"]) == ["NCIT:C3167;NCIT:C122623", "NCIT:C3167"]
+    # The lab's notebooks always join the original values with "<;>".
+    assert list(table.frame["original_target_condition_value"]) == ["ALL<;>MLL REARRANGED", "ALL"]
+    assert list(table.frame["study_design"]) == ["cohort;longitudinal", "cohort"]
+
+    # Merging alone is not a value change: the upload is joined the same way.
+    preview = build_preview("s1", text, table)
+    by_source = {c["source"]: c for c in preview["columns"]}
+    assert by_source["design_a"]["value_changes"] == []
+    assert {v["before"] for v in by_source["condition"]["value_changes"]} == {"ALL;MLL rearranged", "ALL"}
+
+
+def test_other_fields_keep_the_default_separator():
+    text, typed = _frames("a,b\nlung,liver\n")
+
+    table = harmonize_table(
+        text, typed, [_m("a", "body_site"), _m("b", "body_site")], {}, {"target_condition": ";"}
+    )
+
+    assert list(table.frame["body_site"]) == ["lung<;>liver"]
+
+
 def test_merged_columns_rewrite_each_value_before_joining():
     text, typed = _frames("Gender,Sex\nF,female\nM,\n,F\n")
     rewrites = {"sex": {"F": "Female", "female": "Female", "M": "Male"}}

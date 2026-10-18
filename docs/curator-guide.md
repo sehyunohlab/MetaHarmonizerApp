@@ -227,7 +227,13 @@ export anything or mark the study as exported.
 - Columns you accepted for the same field are merged into it, placed where the
   first of them is in your file, the way the lab's harmonized metadata
   consolidates them. Each row lists those columns' values in file order,
-  separated by `<;>` (a value may itself contain `;`); blank and missing values
+  separated as the lab's data dictionary for the target schema specifies for
+  that field. In the lab's cBioPortal vocabulary that is `<;>` (a value may
+  itself contain `;`) for most fields, such as body site, disease type,
+  specimen type and treatments, but `;` for target condition, study design,
+  smoker and ancestry, as in the lab's published curated metadata; in
+  curatedMetagenomicData it is `;` for most fields. A field the dictionary
+  says nothing about uses `<;>`. Blank and missing values
   are skipped. Only accepted columns are merged: a column whose mapping is
   still an unreviewed suggestion is not added to a field you accepted columns
   for, and a field with no accepted column uses its best suggestion alone. To
@@ -236,7 +242,8 @@ export anything or mark the study as exported.
   site) is written as four columns, as in the lab's harmonized files
   (MetaHarmonizer_Test_Data): `original_<field>_value` holds each row's
   uploaded values joined by `<;>`, in capitals, repeats included;
-  `curated_<field>` holds their accepted terms, each once, so `F` and `female`
+  `curated_<field>` holds their accepted terms, each once and joined by the
+  field's separator, so `F` and `female`
   that both became `Female` give `Female`; `curated_<field>_ontology_term_id`
   holds the terms' ids in the same order; and `curated_<field>_source` names
   the columns the row's values came from, joined by `;`. A value without an
@@ -290,7 +297,7 @@ completing the study:
   format accepts for a yes/no attribute. A column whose values became ontology
   terms, and attributes cBioPortal defines as text (such as `SEX` and
   `SAMPLE_TYPE`), are declared as text even when the uploaded values are
-  numbers or yes/no. Merged attributes hold the same `<;>`-separated values as
+  numbers or yes/no.   Merged attributes hold the same values, with the same separators, as
   the Harmonized CSV, and are declared as text when a cell holds more than one
   number or yes/no value. cBioPortal reads one line per row and
   does not unquote values, so a line break or tab inside a value is written as a

@@ -81,7 +81,7 @@ export function ChangedValuesGrid({
       <CardHeader
         icon={<Rows3 className="h-4 w-4" />}
         title="Harmonized metadata"
-        description={`Every exported value next to your upload. Renamed columns and changed cells show the uploaded name or value struck through; merged columns list each row's values separated by ${MULTI_VALUE_DELIMITER}.${
+        description={`Every exported value next to your upload. Renamed columns and changed cells show the uploaded name or value struck through; merged columns list each row's values separated as the lab's data dictionary specifies for the field (${MULTI_VALUE_DELIMITER} for most, ; for a few).${
           hasCurated
             ? " A field mapped to ontology terms is written as four columns, as in the lab's harmonized files: its uploaded values, its terms, their ids and the columns they came from."
             : ''
@@ -220,7 +220,7 @@ export function ChangedValuesGrid({
                         from
                           ? `Renamed from ${from}`
                           : merged
-                            ? `Merged from ${merged.join(', ')}; values separated by ${MULTI_VALUE_DELIMITER}`
+                            ? `Merged from ${merged.join(', ')}`
                             : companions[name]
                               ? `The ${companions[name]}`
                               : undefined

@@ -67,3 +67,25 @@ def test_every_alias_names_a_field_of_the_dictionary():
     alias_path = next(REG.glob(f"{PREFIX}_target_attrs_alias*.csv"))
     with open(alias_path, encoding="utf-8") as handle:
         assert {row["field_name"] for row in csv.DictReader(handle)} <= fields
+
+
+def test_field_separators_follow_the_lab_dictionaries_and_release():
+    # The lab's cBioPortal dictionary: "<;>" for most multi-valued fields, ";"
+    # for three; its published release joins ancestry values with ";" too.
+    lab = _schema_registry.field_separators("omicsmlprepo_cbio")
+    assert {f: lab[f] for f in ("body_site", "disease_type", "treatment_name")} == dict.fromkeys(
+        ("body_site", "disease_type", "treatment_name"), "<;>"
+    )
+    assert {f: lab[f] for f in ("target_condition", "study_design", "smoker", "ancestry", "ancestry_details")} == (
+        dict.fromkeys(("target_condition", "study_design", "smoker", "ancestry", "ancestry_details"), ";")
+    )
+    assert "sex" not in lab  # single-valued: the default separator applies
+
+    # curatedMetagenomicData separates most fields with ";", key:value fields with "<;>".
+    cmd = _schema_registry.field_separators("cmd")
+    assert (cmd["disease"], cmd["curator"], cmd["feces_phenotype"]) == (";", ";", "<;>")
+
+    # cBioPortal's attribute IDs and GDC name no separator.
+    assert _schema_registry.field_separators("cbioportal") == {}
+    assert _schema_registry.field_separators("gdc") == {}
+    assert _schema_registry.field_separators(None) == {}

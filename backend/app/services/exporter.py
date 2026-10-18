@@ -26,7 +26,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories import audit as audit_repo
 from app.repositories import mappings as mappings_repo
 from app.repositories import ontology as ontology_repo
+from app.repositories import schema_versions as schema_versions_repo
 from app.repositories import studies as studies_repo
+from app.services import schema_catalog
 
 
 # cBioPortal auto-populates these; they must not appear in a clinical data file.
@@ -207,6 +209,11 @@ def _find_id_column(df: pd.DataFrame, candidates: list[str]) -> str:
 # order, "separated by a special 3-character delimiter ("<;>")... implemented so
 # as to preserve curated ontology terms containing semicolons"; the curated
 # value lists each term once. Upstream's extract_valid_value splits on it.
+# A field whose lab data dictionary names another separator (";" for
+# target_condition, study_design or smoker in the cBioPortal vocabulary, and
+# most curatedMetagenomicData fields) uses that one; see
+# schema_catalog.field_separators. The original_<f>_value column always uses
+# "<;>", as both lab curation notebooks do.
 MULTI_VALUE_DELIMITER = "<;>"
 
 # Identifier fields hold one value per row, so their columns are never merged:
@@ -295,9 +302,14 @@ def _field_sources(
     return fields
 
 
-def _join_values(values: Iterable[Any]) -> str:
-    """Distinct values, in order, separated by :data:`MULTI_VALUE_DELIMITER`."""
-    return MULTI_VALUE_DELIMITER.join(dict.fromkeys(str(value) for value in values))
+def _join_values(values: Iterable[Any], separator: str = MULTI_VALUE_DELIMITER) -> str:
+    """Distinct values, in order, joined by ``separator``."""
+    return separator.join(dict.fromkeys(str(value) for value in values))
+
+
+def _separator(separators: Mapping[str, str] | None, field: str) -> str:
+    """The separator for ``field``'s values: its lab dictionary's, else ``<;>``."""
+    return (separators or {}).get(field.lower(), MULTI_VALUE_DELIMITER)
 
 
 def _has_value(value: Any) -> bool:
@@ -357,6 +369,7 @@ def harmonize_table(
     raw_df: pd.DataFrame,
     mappings: list[dict[str, Any]],
     value_rewrites: dict[str, dict[str, str]],
+    separators: Mapping[str, str] | None = None,
 ) -> HarmonizedTable:
     """Build the harmonized table: rename raw columns to their accepted/curated
     mappings, merge the accepted columns of one field, drop unmapped columns,
@@ -369,6 +382,8 @@ def harmonize_table(
     written as four columns (see :func:`_curated_columns`). Any other field is
     one column named after it whose cells keep the uploaded text, so numbers
     and missing-value markers are not reformatted (see :func:`_plain_column`).
+    ``separators`` gives the separator of a field's merged values (field name
+    in lower case; see :func:`_separator`).
     """
     fields = _field_sources(mappings, list(raw_df.columns))
     sources_of = {target: sources for target, sources in fields.values()}
@@ -429,13 +444,17 @@ def harmonize_table(
             continue  # a merged field is built with its first source
 
         if field in curated:
-            built = _curated_columns(raw_text, raw_df, field, sources_of[field], value_rewrites[field])
+            built = _curated_columns(
+                raw_text, raw_df, field, sources_of[field], value_rewrites[field],
+                _separator(separators, field),
+            )
         else:
             # Rewrites belong to a field mapping: a kept (rejected) column is
             # exported as uploaded, even if terms for a field of the same name exist.
             lookup = value_rewrites.get(field) if field is not None else None
             sources = sources_of[field] if field is not None else [raw]
-            built = {target: _plain_column(raw_text, raw_df, sources, lookup)}
+            separator = _separator(separators, field) if field is not None else MULTI_VALUE_DELIMITER
+            built = {target: _plain_column(raw_text, raw_df, sources, lookup, separator)}
         for name, (text, hit, uploaded) in built.items():
             # Neutralize spreadsheet formula-injection in this human-facing CSV.
             # (The cBioPortal TSVs are machine-read by the importer, so they are
@@ -484,6 +503,7 @@ def _curated_columns(
     field: str,
     sources: list[str],
     lookup: Mapping[str, str],
+    separator: str = MULTI_VALUE_DELIMITER,
 ) -> dict[str, Column]:
     """A curated field's four columns, built as in the lab's harmonized files
     (MetaHarmonizer_Test_Data, data/per_study/harmonized; reproduced there on
@@ -492,7 +512,8 @@ def _curated_columns(
 
     - ``original_<f>_value``: their values joined by "<;>", repeats kept, in capitals;
     - ``curated_<f>``: each value's confirmed term, each term once, values
-      without a confirmed term left out;
+      without a confirmed term left out, joined by ``separator`` (the field's
+      separator in the lab's data dictionary, "<;>" for most fields);
     - ``curated_<f>_ontology_term_id``: those terms' ids, in the same order;
     - ``curated_<f>_source``: the columns used, joined by ";".
 
@@ -516,11 +537,10 @@ def _curated_columns(
                 for term, term_id in _split_terms(lookup[key], term_ids.get(key)):
                     if terms.get(term, MISSING) == MISSING:
                         terms[term] = term_id
-        joined = MULTI_VALUE_DELIMITER.join(values)
-        originals.append(joined.upper() if values else MISSING)
-        uploaded.append(joined if values else MISSING)
-        curated.append(MULTI_VALUE_DELIMITER.join(terms) if terms else MISSING)
-        ids.append(MULTI_VALUE_DELIMITER.join(terms.values()) if terms else MISSING)
+        originals.append(MULTI_VALUE_DELIMITER.join(values).upper() if values else MISSING)
+        uploaded.append(separator.join(values) if values else MISSING)
+        curated.append(separator.join(terms) if terms else MISSING)
+        ids.append(separator.join(terms.values()) if terms else MISSING)
         used.append(";".join(sources[k] for k in present) if present else MISSING)
         hits.append(bool(terms))
     index = raw_text.index
@@ -558,13 +578,15 @@ def _plain_column(
     raw_df: pd.DataFrame,
     sources: list[str],
     lookup: Mapping[str, str] | None,
+    separator: str = MULTI_VALUE_DELIMITER,
 ) -> Column:
     """A field's one column: its text, where it holds a confirmed term, and
     the uploaded text it comes from.
 
     One source keeps its uploaded cells. Several are merged per row: the
     distinct values of the columns with one, in upload order, joined by
-    :data:`MULTI_VALUE_DELIMITER`. A row with no value in any of them keeps the
+    ``separator`` (the field's separator in the lab's data dictionary, "<;>"
+    for most fields). A row with no value in any of them keeps the
     first column's text (blank, or a marker such as ``NA``). ``lookup`` rewrites
     accepted raw values to their confirmed term (U5).
     """
@@ -595,8 +617,8 @@ def _plain_column(
             uploaded.append(text_cells[0][i])
             rewritten.append(False)
             continue
-        merged.append(_join_values(output_cells[k][i] for k in present))
-        uploaded.append(_join_values(text_cells[k][i] for k in present))
+        merged.append(_join_values((output_cells[k][i] for k in present), separator))
+        uploaded.append(_join_values((text_cells[k][i] for k in present), separator))
         rewritten.append(any(hit_cells[k][i] for k in present))
     index = raw_text.index
     return (
@@ -604,6 +626,16 @@ def _plain_column(
         pd.Series(rewritten, index=index, dtype=bool),
         pd.Series(uploaded, index=index, dtype=object),
     )
+
+
+async def _study_separators(db: AsyncSession, study_id: str) -> dict[str, str]:
+    """The field separators of the target schema the study was mapped to
+    (its schema version's), else of the default target schema."""
+    study = await studies_repo.get_study(db, study_id) or {}
+    version_id = study.get("schema_version_id")
+    version = await schema_versions_repo.get_by_id(db, version_id) if version_id else None
+    key = version.target_schema if version else schema_catalog.default_schema_key()
+    return schema_catalog.field_separators(key)
 
 
 async def build_harmonized_table(
@@ -615,9 +647,10 @@ async def build_harmonized_table(
     """Load a study's mappings and confirmed rewrites, then build its table."""
     mappings = await mappings_repo.get_mappings(db, study_id)
     value_rewrites = await _build_value_rewrites(db, study_id)
+    separators = await _study_separators(db, study_id)
     if raw_text is None:
         raw_text = _text_view(raw_df)
-    return harmonize_table(raw_text, raw_df, mappings, value_rewrites)
+    return harmonize_table(raw_text, raw_df, mappings, value_rewrites, separators)
 
 
 async def export_harmonized_csv(
@@ -745,13 +778,16 @@ def _cbio_id(field: str) -> str:
 
 
 def _clinical_column_specs(
-    mappings: list[dict[str, Any]], raw_df: pd.DataFrame
+    mappings: list[dict[str, Any]],
+    raw_df: pd.DataFrame,
+    separators: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Build cBioPortal column specs, in upload order, for the columns chosen to
     fill a schema field — the same choice as the Harmonized CSV.
 
     ``sources`` lists every column merged into an attribute (``raw`` is the
-    first). Excludes PATIENT_ID / SAMPLE_ID (injected per-file by the caller)
+    first), and ``separator`` joins their values (see :func:`_separator`).
+    Excludes PATIENT_ID / SAMPLE_ID (injected per-file by the caller)
     and checklist-banned columns, which can't fill an attribute.
     """
     allowed = [
@@ -775,6 +811,7 @@ def _clinical_column_specs(
             {
                 "raw": sources[0],
                 "sources": sources,
+                "separator": _separator(separators, target),
                 "target": target_id,
                 "display": target.replace("_", " ").title(),
                 "description": target.replace("_", " ").capitalize(),
@@ -826,7 +863,7 @@ def _write_clinical_tsv(
     file), so a cell that isn't rewritten keeps its uploaded text: sample
     ``0012`` stays ``0012``, as in the Harmonized CSV. Missing values are
     written empty. A spec with several ``sources`` gets their distinct values,
-    in order, joined by :data:`MULTI_VALUE_DELIMITER`.
+    in order, joined by its ``separator`` (default :data:`MULTI_VALUE_DELIMITER`).
     """
     rewrites = value_rewrites or {}
     targets = {c["target"] for c in cols}
@@ -865,7 +902,9 @@ def _write_clinical_tsv(
                 # Apply the curator-confirmed value rewrite (U5).
                 term = _term(lookup, str(typed_cells[src][i]), text) if lookup else None
                 parts.append(term if term is not None else text)
-            out_row.append(_tsv_cell(_join_values(parts)) if parts else "")
+            out_row.append(
+                _tsv_cell(_join_values(parts, c.get("separator", MULTI_VALUE_DELIMITER))) if parts else ""
+            )
         rows.append(out_row)
 
     # cBioPortal accepts only TRUE / FALSE in a BOOLEAN attribute: write yes/no
@@ -945,7 +984,7 @@ async def export_cbioportal(
     keep the uploaded text (``raw_text``) when given.
     """
     mappings = await mappings_repo.get_mappings(db, study_id)
-    specs = _clinical_column_specs(mappings, raw_df)
+    specs = _clinical_column_specs(mappings, raw_df, await _study_separators(db, study_id))
 
     patient_src = _id_raw_source(
         mappings, raw_df, "PATIENT_ID",
@@ -1072,7 +1111,7 @@ async def export_cbioportal_study(
     description = study.get("description") or f"Harmonized clinical data for {name}."
 
     mappings = await mappings_repo.get_mappings(db, study_id)
-    specs = _clinical_column_specs(mappings, raw_df)
+    specs = _clinical_column_specs(mappings, raw_df, await _study_separators(db, study_id))
 
     patient_src = _id_raw_source(
         mappings, raw_df, "PATIENT_ID",
