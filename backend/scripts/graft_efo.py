@@ -45,13 +45,16 @@ def _find(root: Path, name: str) -> Path | None:
 
 
 def _copy_efo_tables(old_db: Path, new_db: Path) -> None:
-    """Copy every ``efo_*`` table from the old KB's sqlite into the fresh one."""
+    """Copy the EFO phenotype corpus tables (``efo_*_phenotype``) from the old
+    KB's sqlite into the fresh one: the ones its grafted index reads. Other
+    ``efo_*`` tables, such as a freshly built per-field corpus's, stay."""
     con = sqlite3.connect(str(new_db))
     try:
         con.execute("ATTACH ? AS old", (str(old_db),))
         tables = [
             r[0] for r in con.execute(
-                "SELECT name FROM old.sqlite_master WHERE type='table' AND name LIKE 'efo\\_%' ESCAPE '\\'"
+                "SELECT name FROM old.sqlite_master WHERE type='table' "
+                "AND name LIKE 'efo\\_%\\_phenotype' ESCAPE '\\'"
             )
         ]
         for t in tables:

@@ -199,11 +199,13 @@ class MetaHarmonizerAdapter:
         self,
         raw_df: pd.DataFrame,
         schema_mappings: list[dict[str, Any]],
+        target_schema: str | None = None,
     ) -> list[dict[str, Any]]:
-        # Value-to-ontology mapping (F-11). Route the engine's first-class
-        # categories (NCIt-disease, UBERON-bodysite, NCIt-treatment) through
-        # OntoMapEngine when ONTOLOGY_ENGINE=1; otherwise (and on any failure or
-        # missing corpus) fall back to the curated dictionary.
+        # Value-to-ontology mapping (F-11). Through OntoMapEngine when
+        # ONTOLOGY_ENGINE=1: fields whose target schema's dictionary names a
+        # corpus against it, and the engine's own corpora (NCIt disease and
+        # treatment, body sites); otherwise (and on any failure or missing
+        # corpus) the curated dictionary.
         from app.services.harmonizer import run_ontology_mapping
 
         from . import _ontology
@@ -214,7 +216,7 @@ class MetaHarmonizerAdapter:
         try:
             pkg = _require_pkg()
             engine_rows, handled = _ontology.map_values_via_engine(
-                pkg, raw_df, schema_mappings
+                pkg, raw_df, schema_mappings, target_schema
             )
         except Exception:  # noqa: BLE001 — never let the engine path break mapping
             return run_ontology_mapping(raw_df, schema_mappings)

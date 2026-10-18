@@ -175,6 +175,39 @@ versioning once a stable `1.x` release is declared.
   separator, uses `;` as the release does. A field without a separator keeps
   `<;>`, and `original_<field>_value` keeps `<;>`, as in the lab's curation
   notebooks. The Harmonized CSV, the preview and the cBioPortal files agree.
+- A field's values are now mapped to the ontology terms its target schema's
+  data dictionary names, the lab's design (MetaHarmonizerSchemaRegistry and
+  the engine's `CombinedCorpusBuilder`): the descendants (or children) of each
+  `dynamic.enum` root plus the listed `static.enum` terms, with one engine run
+  per ontology layer and the candidates merged by score (the engine's
+  `merge_match_results`). In the default cBioPortal schema, `disease_type` and
+  `target_condition` map to every NCIt *Disease or Disorder* term (51,039;
+  before, the 15,809 under *Neoplasm*), `country` to NCIt *Country*, and
+  `age_group` to the dictionary's NCIt terms. curatedMetagenomicData maps 20
+  fields, among them its disease fields to NCIt *Disease or Disorder*, MONDO
+  and the listed NCIt terms, `body_site` to the UBERON terms its dictionary
+  lists, and `treatment` to NCIt *Drug, Food, Chemical or Biomedical
+  Material*. A field whose dictionary names only an ontology the engine cannot
+  fetch yet (HANCESTRO for ancestry, SNOMED CT for smoking status) keeps the
+  value dictionary. These corpora are built into the KB (`build_kb --fields`)
+  and used once the KB holds them.
+- Body sites in schemas whose dictionary lists no body-site terms (the
+  cBioPortal schemas, GDC) map to NCIt body parts, the engine's default
+  ontology and the lab's: 99.9% of the body-site terms in its cBioPortal
+  release are NCIt. On the lab's cBioPortal body-site curation map, the first
+  term's id matches the lab's for 32.2% of values with NCIt, against 0.3% with
+  UBERON (half the map's values are curated as several terms, such as an organ
+  plus *Left*).
+- Fields that only the ontology engine maps (such as `primary_site`) were not
+  mapped again when a curator moved a column into them, and their values were
+  left out when a study's ontology results came from the proposal cache.
+- The KB bundle is published in parts under GitHub's 2 GiB release-asset limit
+  (`kb_offline_bundle.tar.gz.part00`, … listed by
+  `kb_offline_bundle.tar.gz.parts`); the importer and the production rollout
+  join them and check the whole bundle's sha256. The KB refresh builds the
+  per-field corpora in their own job (continued by a second when they do not
+  fit in one), and can rebuild only those (`fields_only`) or run without
+  publishing (`dry_run`).
 
 ## [0.1.0] - 2026-08-19
 

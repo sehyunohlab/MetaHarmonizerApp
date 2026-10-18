@@ -36,7 +36,20 @@ if [[ "${KB_DEPLOY_DRY_RUN:-0}" == "1" ]]; then
 fi
 
 bundle="$tmp/kb_offline_bundle.tar.gz"
-curl -fsSL --retry 5 --retry-delay 2 "$bundle_url" -o "$bundle"
+# A bundle over GitHub's 2 GiB release-asset limit is published in parts,
+# listed in order by <bundle>.parts; the sha256 is the whole bundle's.
+if curl -fsSL --retry 5 --retry-delay 2 "$bundle_url.parts" -o "$tmp/bundle.parts" 2>/dev/null; then
+  : > "$bundle"
+  while read -r part; do
+    [[ -n "$part" ]] || continue
+    [[ "$part" =~ ^[A-Za-z0-9._-]+\.part[0-9]{2}$ ]] || { echo "Invalid KB bundle part: $part" >&2; exit 1; }
+    curl -fsSL --retry 5 --retry-delay 2 "${bundle_url%/*}/$part" -o "$tmp/part"
+    cat "$tmp/part" >> "$bundle"
+    rm -f "$tmp/part"
+  done < "$tmp/bundle.parts"
+else
+  curl -fsSL --retry 5 --retry-delay 2 "$bundle_url" -o "$bundle"
+fi
 printf '%s  %s\n' "$target_sha" "$bundle" | sha256sum -c -
 
 new_engine="metaharmonizer_engine_cache_${short_sha}"

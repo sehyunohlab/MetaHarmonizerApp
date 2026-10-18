@@ -11,6 +11,11 @@ REQUIRED_ONTOLOGY_TUPLES = (
     ("bodysite", "uberon"),
     ("treatment", "ncit"),
 )
+# Engine corpora the KB build also installs, used when present: NCIt body
+# parts, the engine's default ontology for body sites and the one the lab's
+# cBioPortal curation uses (99.9% of its body_site terms).
+OPTIONAL_ONTOLOGY_TUPLES = (("bodysite", "ncit"),)
+KB_ONTOLOGY_TUPLES = REQUIRED_ONTOLOGY_TUPLES + OPTIONAL_ONTOLOGY_TUPLES
 REQUIRED_CORPUS_NAMES = tuple(
     f"{source}_{category}_corpus.csv" for category, source in REQUIRED_ONTOLOGY_TUPLES
 )
@@ -28,6 +33,15 @@ def runtime_ontology_required() -> bool:
 
 def _nonempty(path: Path) -> bool:
     return path.is_file() and path.stat().st_size > 0
+
+
+def engine_corpus_installed(category: str, source: str) -> bool:
+    """True when the KB holds the engine corpus ``(category, source)``: its
+    corpus CSV and exact sap-bert index."""
+    _db, faiss_dir, corpus_dir, _models, _hf = _default_paths()
+    return _nonempty(corpus_dir / f"{source}_{category}_corpus.csv") and _nonempty(
+        faiss_dir / f"st_sap_bert_{source}_{category}.index"
+    )
 
 
 def _default_paths() -> tuple[Path, Path, Path, Path, Path]:

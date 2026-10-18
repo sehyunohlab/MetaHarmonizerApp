@@ -45,14 +45,36 @@ def test_copy_efo_tables_handles_source_only_table(tmp_path: Path):
     old_db = tmp_path / "old.sqlite"
     new_db = tmp_path / "new.sqlite"
     with sqlite3.connect(old_db) as connection:
-        connection.execute('CREATE TABLE "efo_phenotype" (id INTEGER)')
-        connection.execute('INSERT INTO "efo_phenotype" VALUES (1)')
+        connection.execute('CREATE TABLE "efo_corpus_phenotype" (id INTEGER)')
+        connection.execute('INSERT INTO "efo_corpus_phenotype" VALUES (1)')
     sqlite3.connect(new_db).close()
 
     _copy_efo_tables(old_db, new_db)
 
-    assert _rows(old_db, "efo_phenotype") == [(1,)]
-    assert _rows(new_db, "efo_phenotype") == [(1,)]
+    assert _rows(old_db, "efo_corpus_phenotype") == [(1,)]
+    assert _rows(new_db, "efo_corpus_phenotype") == [(1,)]
+
+
+def test_copy_efo_tables_leaves_field_corpus_tables(tmp_path: Path):
+    # A per-field corpus's EFO tables are built fresh with their index; the
+    # old KB's copy must neither replace them nor be added.
+    old_db = tmp_path / "old.sqlite"
+    new_db = tmp_path / "new.sqlite"
+    with sqlite3.connect(old_db) as connection:
+        for table in ("efo_rag_phenotype", "efo_rag_field_1a2b3c4d", "efo_rag_field_99999999"):
+            connection.execute(f'CREATE TABLE "{table}" (id INTEGER)')
+            connection.execute(f'INSERT INTO "{table}" VALUES (1)')
+    with sqlite3.connect(new_db) as connection:
+        connection.execute('CREATE TABLE "efo_rag_field_1a2b3c4d" (id INTEGER)')
+        connection.execute('INSERT INTO "efo_rag_field_1a2b3c4d" VALUES (2)')
+
+    _copy_efo_tables(old_db, new_db)
+
+    assert _rows(new_db, "efo_rag_phenotype") == [(1,)]
+    assert _rows(new_db, "efo_rag_field_1a2b3c4d") == [(2,)]
+    with sqlite3.connect(new_db) as connection:
+        names = {row[0] for row in connection.execute("SELECT name FROM sqlite_master")}
+    assert "efo_rag_field_99999999" not in names
 
 
 def test_copy_hf_hub_preserves_model_tree(tmp_path: Path):

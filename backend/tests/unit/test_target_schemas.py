@@ -69,6 +69,22 @@ def test_every_alias_names_a_field_of_the_dictionary():
         assert {row["field_name"] for row in csv.DictReader(handle)} <= fields
 
 
+def test_dictionary_lists_use_the_registry_delimiter():
+    # The lab's schema registry delimits every list cell with "|"; the engine's
+    # corpus builder splits dynamic.enum roots on it.
+    by_field = {row["col.name"]: row for row in _dictionary()}
+    assert by_field["target_condition"]["dynamic.enum"] == "NCIT:C7057|EFO_0000408"
+    assert by_field["sex"]["allowedvalues"] == "Female|Male"
+    for row in by_field.values():
+        for column in ("static.enum", "dynamic.enum", "corpus.type"):
+            assert ";" not in row[column], (row["col.name"], column)
+    # A regex keeps its "|" alternation and is left as the lab wrote it.
+    assert by_field["tumor_staging_tnm"]["allowedvalues"] == "T[X1-4]N[X0-3]M[X0-1]|pTis|Tis"
+    assert refresh.standardize_lists([{"allowedvalues": "a;b", "static.enum": "NA"}]) == [
+        {"allowedvalues": "a|b", "static.enum": "NA"}
+    ]
+
+
 def test_field_separators_follow_the_lab_dictionaries_and_release():
     # The lab's cBioPortal dictionary: "<;>" for most multi-valued fields, ";"
     # for three; its published release joins ancestry values with ";" too.

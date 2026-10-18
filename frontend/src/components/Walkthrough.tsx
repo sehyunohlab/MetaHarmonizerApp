@@ -231,7 +231,7 @@ function LearnMock() {
 function OntologyMock() {
   const rows: Array<[string, string, string]> = [
     ['Hepatocellular Carcinoma', 'HCC', 'NCIT:C3099'],
-    ['brain', 'Brain', 'UBERON:0000955'],
+    ['brain', 'Brain', 'NCIT:C12439'],
   ];
   return (
     <div className="space-y-2 text-xs">
@@ -391,7 +391,7 @@ const FEATURE_SLIDES: Slide[] = [
     icon: <Microscope className="h-5 w-5" />,
     tone: 'bg-rose-50 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300',
     title: 'Confirm ontology codes',
-    action: 'Each value resolves to a real code — NCIt for disease, UBERON for body site — to accept or override.',
+    action: 'Each value resolves to a real code from the ontologies your target schema uses (NCIt, UBERON, MONDO…) to accept or override.',
     visual: (
       <Frame label="Ontology review">
         <OntologyMock />

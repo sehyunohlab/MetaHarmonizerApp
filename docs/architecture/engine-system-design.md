@@ -154,7 +154,8 @@ Scores are clamped to `[0,1]`; the top match plus up to 4 alternatives are retur
 | `metaharmonizer_impl.py` | Real adapter. Only importer of the wheel. Translates upstream `match1..5`/`stage`/`method` → dashboard rows; resolves target schema; merges admin alias uploads. |
 | `mock_impl.py` | Deterministic, dependency-free engine for tests/CI/demo. |
 | `_schema_registry.py` | Resolves the curator-selected target schema (the lab's curated cBioPortal vocabulary by default, cBioPortal attributes, GDC, cMD, or admin-uploaded versions). |
-| `_ontology.py` | Routes NCIt-disease / UBERON-bodysite / NCIt-treatment through `OntoMapEngine`; dictionary fallback for the rest. |
+| `_ontology.py` | Routes value → ontology mapping through `OntoMapEngine`: a field its target schema's data dictionary gives terms against those terms (`_field_corpora`), other disease / body-site / treatment fields against the engine's NCIt Neoplasm / Body Part / Pharmacologic Substance corpora; dictionary fallback for the rest. |
+| `_field_corpora.py` | The lab's per-field corpora: derives each dictionary field's corpus layers (dynamic roots, listed terms) as shared *units*, one engine run per unit merged by score (`merge_match_results`), and builds the units into the KB (`scripts/build_kb.py`). |
 | `_perf.py` | Shared-model + persistent NCI-EVS cache patches; `warm_model()`, `save_nci_cache()`. |
 | `schema_dicts.py`, `types.py` | Curated dictionaries; typed DTOs (`EngineHealth`). |
 
@@ -202,7 +203,7 @@ bundle** delivered out-of-band, never at request time.
 
 ```mermaid
 flowchart LR
-    BUILD["scripts/build_kb.py<br/>+ package_kb"]:::job -->|"kb_offline_bundle.tar.gz"| BUNDLE["KB bundle (~1.4 GB)<br/>FAISS + models + corpora"]:::store
+    BUILD["scripts/build_kb.py (+ --fields)<br/>+ package_kb"]:::job -->|"kb_offline_bundle.tar.gz<br/>(released in parts under 2 GiB)"| BUNDLE["KB bundle<br/>FAISS + models + corpora<br/>+ per-field corpora"]:::store
     BUNDLE -->|"one-shot: kb-import<br/>(compose --profile kb)"| VOLS["Docker volumes:<br/>engine_cache · corpus_data · hf_cache"]:::store
     VOLS --> API["api / worker<br/>HF_HUB_OFFLINE=1<br/>TRANSFORMERS_OFFLINE=1"]:::app
     API -->|"stamps"| PIN["ontology_snapshots<br/>(engine_version + bundle sha)"]:::db

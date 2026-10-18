@@ -119,7 +119,9 @@ per run, which is what makes a mapping reproducible.
 | --- | --- | --- |
 | NCIt disease | NCI EVS REST | Quarterly, automatically |
 | NCIt treatment | NCI EVS REST | Quarterly, automatically |
+| NCIt body part | NCI EVS REST | Quarterly, automatically |
 | UBERON body site | OLS4 | Quarterly, automatically |
+| Per-field corpora of the schemas' data dictionaries (NCIt branches and terms, MONDO, UBERON terms) | NCI EVS REST, OLS4 | Quarterly, automatically |
 | EFO phenotype | Supplied corpus | Carried forward unchanged |
 
 The refresh runs on the first day of January, April, July, and October at 03:00

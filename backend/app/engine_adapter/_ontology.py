@@ -21,6 +21,7 @@ import pandas as pd
 
 from .kb_assets import (
     REQUIRED_ONTOLOGY_TUPLES,
+    engine_corpus_installed,
     installed_kb_issues,
     runtime_engine_required,
     runtime_ontology_required,
@@ -40,8 +41,11 @@ def _auto_accept_threshold() -> float:
     except Exception:  # noqa: BLE001 — never fail mapping over a config read
         return 0.9
 
-# Dashboard field name (lower) → engine ontology (category, source), limited to
-# the engine's first-class tuples; anything else uses the dictionary fallback.
+# Dashboard field name (lower) → engine ontology (category, source) for a field
+# its target schema's data dictionary names no corpus for (see
+# ``_field_corpora``), limited to the engine's own corpora. Body sites use NCIt
+# body parts: the engine's default ontology and the lab's (99.9% of the body_site
+# terms in its cBioPortal release); cMD's dictionary lists UBERON terms instead.
 # Excluded on purpose: GDC ``treatment_or_therapy`` (yes/no/unknown) and
 # ``morphology`` (ICD-O codes such as 8000/0) are not term vocabularies.
 FIELD_ONTOLOGY: dict[str, tuple[str, str]] = {
@@ -51,11 +55,11 @@ FIELD_ONTOLOGY: dict[str, tuple[str, str]] = {
     "primary_diagnosis": ("disease", "ncit"),
     "primary_disease": ("disease", "ncit"),
     "disease_type": ("disease", "ncit"),
-    "body_site": ("bodysite", "uberon"),
-    "primary_site": ("bodysite", "uberon"),
-    "tissue_or_organ_of_origin": ("bodysite", "uberon"),
-    "site_of_resection_or_biopsy": ("bodysite", "uberon"),
-    "biospecimen_anatomic_site": ("bodysite", "uberon"),
+    "body_site": ("bodysite", "ncit"),
+    "primary_site": ("bodysite", "ncit"),
+    "tissue_or_organ_of_origin": ("bodysite", "ncit"),
+    "site_of_resection_or_biopsy": ("bodysite", "ncit"),
+    "biospecimen_anatomic_site": ("bodysite", "ncit"),
     "treatment": ("treatment", "ncit"),
     "treatment_name": ("treatment", "ncit"),
     "treatment_type": ("treatment", "ncit"),
@@ -63,9 +67,26 @@ FIELD_ONTOLOGY: dict[str, tuple[str, str]] = {
 }
 
 
-def is_ontology_field(field: str | None) -> bool:
-    """True when a curated field routes to a first-class ontology (NCIt/UBERON)."""
-    return bool(field) and field.strip().lower() in FIELD_ONTOLOGY
+def is_ontology_field(field: str | None, target_schema: str | None = None) -> bool:
+    """True when the engine maps a field's values: an engine corpus routes it,
+    or the target schema's data dictionary declares a corpus for it that the
+    KB holds (see ``_field_corpora``)."""
+    if not field:
+        return False
+    name = field.strip().lower()
+    if name in FIELD_ONTOLOGY:
+        return True
+    if not (runtime_engine_required() and engine_enabled()):
+        return False
+    try:
+        from . import _field_corpora, _schema_registry
+
+        key = target_schema if _schema_registry.is_valid(target_schema) else _schema_registry.default_key()
+        corpus = _field_corpora.field_corpora(key).get(name)
+        return bool(corpus) and any(_field_corpora.installed(unit) for unit in corpus.units)
+    except Exception:  # noqa: BLE001 — an unreadable dictionary means no corpus
+        logger.warning("could not read the field corpora of %s", target_schema, exc_info=True)
+        return False
 
 
 def engine_enabled() -> bool:
@@ -198,12 +219,17 @@ def map_values_via_engine(
     pkg: Any,
     raw_df: "pd.DataFrame",
     schema_mappings: list[dict[str, Any]],
+    target_schema: str | None = None,
 ) -> tuple[list[dict[str, Any]], set[str]]:
     """Map supported fields' values through ``OntoMapEngine``.
 
+    A field whose dictionary entry in the target schema names a corpus is
+    mapped against that corpus's units (see ``_field_corpora``); any other
+    field in :data:`FIELD_ONTOLOGY` against the engine's corpus for it.
+
     Returns ``(rows, handled_fields)`` — the ontology rows and the set of field
     names the engine covered, so the caller can fall back to the dictionary for
-    the rest. A per-category failure is logged and left to the fallback.
+    the rest. A per-field failure is logged and left to the fallback.
     """
     OntoMapEngine = getattr(pkg, "OntoMapEngine", None)
     if OntoMapEngine is None:
@@ -213,11 +239,25 @@ def map_values_via_engine(
         logger.error("ontology engine skipped because the offline KB is incomplete: %s", issues)
         return [], set()
 
+    from . import _field_corpora, _schema_registry
+
+    try:
+        corpora = {
+            name: corpus
+            for name, corpus in _field_corpora.field_corpora(
+                target_schema if _schema_registry.is_valid(target_schema) else _schema_registry.default_key()
+            ).items()
+            if any(_field_corpora.installed(unit) for unit in corpus.units)
+        }
+    except Exception:  # noqa: BLE001 — an unreadable dictionary means no field corpora
+        logger.warning("could not read the field corpora of %s", target_schema, exc_info=True)
+        corpora = {}
+
     # Collect unique values per supported field.
     per_field: dict[str, list[str]] = {}
     for m in schema_mappings:
         target = (m.get("curator_field") or m.get("matched_field") or "").strip().lower()
-        if target not in FIELD_ONTOLOGY:
+        if target not in corpora and target not in FIELD_ONTOLOGY:
             continue
         raw_col = m.get("raw_column")
         if not raw_col or raw_col not in raw_df.columns:
@@ -229,23 +269,113 @@ def map_values_via_engine(
     rows: list[dict[str, Any]] = []
     handled: set[str] = set()
     for field_name, values in per_field.items():
-        category, source = FIELD_ONTOLOGY[field_name]
         uniq = sorted(set(values))
         try:
+            if field_name in corpora:
+                rows.extend(_map_with_units(OntoMapEngine, field_name, corpora[field_name], uniq))
+            else:
+                category, source = _engine_corpus(field_name)
+                engine = OntoMapEngine(
+                    corpus_category=category,
+                    query_ls=uniq,
+                    ontology_source=source,
+                    s2_method="sap-bert",
+                    s2_strategy="st",
+                )
+                rows.extend(_normalize_engine_rows(field_name, engine.run(), category, source))
+        except Exception as exc:  # noqa: BLE001 — fall back on any engine error
+            logger.warning("ontology engine failed for field %s: %s; falling back", field_name, exc)
+            continue
+        handled.add(field_name)
+    return rows, handled
+
+
+def _engine_corpus(field_name: str) -> tuple[str, str]:
+    """The engine corpus for a field without a dictionary corpus. A body-site
+    field uses UBERON when the KB has no NCIt body-part corpus yet."""
+    category, source = FIELD_ONTOLOGY[field_name]
+    if category == "bodysite" and source == "ncit" and not engine_corpus_installed(category, source):
+        return category, "uberon"
+    return category, source
+
+
+@lru_cache(maxsize=32)
+def _unit_frame(path: str, stamp: tuple[int, int]) -> "pd.DataFrame":
+    from . import _field_corpora
+
+    return _field_corpora.read_unit(path)
+
+
+def _label_codes(frame: "pd.DataFrame") -> dict[str, str]:
+    codes: dict[str, str] = {}
+    for label, obo in zip(frame["label"], frame["obo_id"]):
+        if isinstance(label, str) and isinstance(obo, str) and obo.strip():
+            codes.setdefault(label.strip().lower(), obo.strip())
+    return codes
+
+
+def _map_with_units(
+    OntoMapEngine: Any, field_name: str, corpus: Any, values: list[str]
+) -> list[dict[str, Any]]:
+    """Map a field's values against each installed unit of its corpus and merge
+    the candidates (the engine's ``merge_match_results``). A term's code comes
+    from the unit whose run scored it highest."""
+    from metaharmonizer.knowledge_db.combined_corpus_builder import merge_match_results
+
+    from . import _field_corpora
+
+    frames: list[pd.DataFrame] = []
+    best: dict[tuple[str, str], tuple[float, str]] = {}
+    for unit in corpus.units:
+        if not _field_corpora.installed(unit):
+            continue
+        if unit.official is not None:
+            category, source = unit.official
             engine = OntoMapEngine(
                 corpus_category=category,
-                query_ls=uniq,
+                query_ls=values,
                 ontology_source=source,
                 s2_method="sap-bert",
                 s2_strategy="st",
             )
-            result = engine.run()
-        except Exception as exc:  # noqa: BLE001 — fall back on any engine error
-            logger.warning(
-                "ontology engine failed for field %s (%s/%s): %s; falling back",
-                field_name, category, source, exc,
+            codes = _corpus_label_to_id(category, source)
+        else:
+            path = _field_corpora.unit_csv(unit)
+            stat = path.stat()
+            frame = _unit_frame(str(path), (stat.st_mtime_ns, stat.st_size))
+            engine = OntoMapEngine(
+                corpus_category=_field_corpora.UNIT_CATEGORY,
+                query_ls=values,
+                corpus_df=frame,
+                ontology_source=unit.ontology,
+                **_field_corpora.UNIT_ENGINE_KWARGS,
             )
-            continue
-        rows.extend(_normalize_engine_rows(field_name, result, category, source))
-        handled.add(field_name)
-    return rows, handled
+            codes = _label_codes(frame)
+        result = engine.run()
+        frames.append(result)
+        for raw in result.to_dict(orient="records"):
+            for i in range(1, 6):
+                label = raw.get(f"match{i}")
+                code = codes.get(label.strip().lower()) if isinstance(label, str) else None
+                if not code:
+                    continue
+                key, score = (str(raw.get("query")), label.strip()), _to_score(raw.get(f"match{i}_score"))
+                if key not in best or score > best[key][0]:
+                    best[key] = (score, code)
+
+    rows: list[dict[str, Any]] = []
+    for raw in merge_match_results(frames, top_k=5).to_dict(orient="records"):
+        term = raw.get("match1")
+        term = term.strip() if isinstance(term, str) and term.strip() else None
+        score = _to_score(raw.get("match1_score")) if term else 0.0
+        rows.append(
+            {
+                "field_name": field_name,
+                "raw_value": str(raw.get("query")),
+                "ontology_term": term,
+                "ontology_id": best.get((str(raw.get("query")), term), (0.0, None))[1] if term else None,
+                "confidence_score": round(score, 4),
+                "status": "accepted" if score >= _auto_accept_threshold() else "pending",
+            }
+        )
+    return rows

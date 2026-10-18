@@ -24,6 +24,20 @@ def _upload(monkeypatch, mappings=(), **columns):
     )
 
 
+def _study(monkeypatch, target_schema=None, **study):
+    """Stub the study and, when it has one, its schema version."""
+
+    async def get_study(*args, **kwargs):
+        return study
+
+    async def get_version(db, version_id):
+        assert version_id == study.get("schema_version_id")
+        return SimpleNamespace(target_schema=target_schema)
+
+    monkeypatch.setattr(ontology_rerun.studies_repo, "get_study", get_study)
+    monkeypatch.setattr(ontology_rerun.schema_versions_repo, "get_by_id", get_version)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("old_field", "new_field"),
@@ -38,7 +52,8 @@ async def test_field_edit_or_accept_into_ontology_adds_value_mappings(
         def health(self):
             return SimpleNamespace(version="0.4.1")
 
-        def map_values(self, raw_df, schema_mappings):
+        def map_values(self, raw_df, schema_mappings, target_schema=None):
+            assert target_schema == "cmd"
             assert raw_df.to_dict(orient="list") == {"biopsy_location": ["lung", "liver"]}
             assert schema_mappings == [
                 {
@@ -75,17 +90,14 @@ async def test_field_edit_or_accept_into_ontology_adds_value_mappings(
     async def cache_rows(*args, **kwargs):
         return None
 
-    async def get_study(*args, **kwargs):
-        return {"schema_version_id": 1, "ontology_snapshot_id": 1}
-
     _upload(monkeypatch, biopsy_location=["lung", "liver"])
+    _study(monkeypatch, "cmd", schema_version_id=1, ontology_snapshot_id=1)
     monkeypatch.setattr(ontology_rerun, "get_engine", lambda: Engine())
     monkeypatch.setattr(ontology_rerun.ontology_repo, "delete_unreviewed_ontology", delete_unreviewed)
     monkeypatch.setattr(ontology_rerun.ontology_repo, "existing_value_keys", existing_keys)
     monkeypatch.setattr(ontology_rerun.ontology_repo, "insert_ontology_mappings", insert_rows)
     monkeypatch.setattr(ontology_rerun.proposal_repo, "lookup", no_cache)
     monkeypatch.setattr(ontology_rerun.proposal_repo, "upsert_many", cache_rows)
-    monkeypatch.setattr(ontology_rerun.studies_repo, "get_study", get_study)
 
     result = await ontology_rerun.rerun_column_ontology(
         object(),
@@ -129,16 +141,9 @@ async def test_ontology_rerun_complete_cache_hit_skips_engine_mapping(monkeypatc
     async def insert_rows(db, study_id, rows):
         inserted.extend(rows)
 
-    async def get_study(*args, **kwargs):
-        return {"schema_version_id": 1, "ontology_snapshot_id": 1}
-
     _upload(monkeypatch, site=["lung"])
+    _study(monkeypatch, "cmd", schema_version_id=1, ontology_snapshot_id=1)
     monkeypatch.setattr(ontology_rerun, "get_engine", lambda: Engine())
-    monkeypatch.setattr(
-        ontology_rerun.studies_repo,
-        "get_study",
-        get_study,
-    )
     monkeypatch.setattr(ontology_rerun.proposal_repo, "lookup", cached)
     monkeypatch.setattr(
         ontology_rerun.ontology_repo, "delete_unreviewed_ontology",
@@ -174,6 +179,7 @@ async def test_field_edit_out_of_ontology_removes_only_repository_selected_rows(
         pytest.fail("moving out of an ontology field must not insert rows")
 
     _upload(monkeypatch, biopsy_location=["lung", "liver"])
+    _study(monkeypatch)
     monkeypatch.setattr(
         ontology_rerun,
         "get_engine",
@@ -220,6 +226,7 @@ async def test_moving_out_keeps_the_rows_another_column_of_the_field_uses(monkey
         Biopsy_Site=["Uterus", "Lung"],
         Old_Site=["Lung"],
     )
+    _study(monkeypatch)
     monkeypatch.setattr(ontology_rerun.ontology_repo, "delete_unreviewed_ontology", delete_unreviewed)
 
     result = await ontology_rerun.rerun_column_ontology(
@@ -243,7 +250,7 @@ async def test_rerun_matches_rows_in_either_spelling_of_a_value(monkeypatch):
         def health(self):
             return SimpleNamespace(version="0.4.1")
 
-        def map_values(self, raw_df, schema_mappings):
+        def map_values(self, raw_df, schema_mappings, target_schema=None):
             return [
                 {"field_name": "sex", "raw_value": v, "ontology_term": v, "status": "pending"}
                 for v in raw_df["Sex_Code"]
@@ -268,7 +275,7 @@ async def test_rerun_matches_rows_in_either_spelling_of_a_value(monkeypatch):
     monkeypatch.setattr(ontology_rerun.ontology_repo, "insert_ontology_mappings", insert_rows)
     monkeypatch.setattr(ontology_rerun.proposal_repo, "lookup", lambda *a, **k: _async_value({}))
     monkeypatch.setattr(ontology_rerun.proposal_repo, "upsert_many", lambda *a, **k: _async_value(None))
-    monkeypatch.setattr(ontology_rerun.studies_repo, "get_study", lambda *a: _async_value({}))
+    _study(monkeypatch)
 
     result = await ontology_rerun.rerun_column_ontology(
         object(), study_id="s", file_key="upload.csv",
@@ -279,6 +286,50 @@ async def test_rerun_matches_rows_in_either_spelling_of_a_value(monkeypatch):
     assert deleted == {"race": spellings, "sex": spellings}
     assert [row["raw_value"] for row in inserted] == ["2"]
     assert result == {"added": 1, "removed": 0}
+
+
+@pytest.mark.asyncio
+async def test_rerun_maps_a_field_only_the_study_schema_names_a_corpus_for(monkeypatch):
+    # A field is ontology-bearing per target schema: its dictionary may name a
+    # corpus for it. The gate and the engine get the study's target schema.
+    inserted: list[dict] = []
+
+    class Engine:
+        def health(self):
+            return SimpleNamespace(version="0.4.1")
+
+        def map_values(self, raw_df, schema_mappings, target_schema=None):
+            assert target_schema == "cmd"
+            return [
+                {"field_name": "age_group", "raw_value": v, "ontology_term": "Adult",
+                 "ontology_id": "NCIT:C17600", "status": "pending"}
+                for v in raw_df["Age_Band"]
+            ]
+
+    async def insert_rows(db, study_id, rows):
+        inserted.extend(rows)
+
+    _upload(monkeypatch, Age_Band=["adult"])
+    _study(monkeypatch, "cmd", schema_version_id=7, ontology_snapshot_id=1)
+    monkeypatch.setattr(
+        ontology_rerun,
+        "supports_ontology_mapping",
+        lambda field, target_schema=None: (field, target_schema) == ("age_group", "cmd"),
+    )
+    monkeypatch.setattr(ontology_rerun, "get_engine", lambda: Engine())
+    monkeypatch.setattr(ontology_rerun.ontology_repo, "delete_unreviewed_ontology", lambda *a: _async_value(0))
+    monkeypatch.setattr(ontology_rerun.ontology_repo, "existing_value_keys", lambda *a: _async_value(set()))
+    monkeypatch.setattr(ontology_rerun.ontology_repo, "insert_ontology_mappings", insert_rows)
+    monkeypatch.setattr(ontology_rerun.proposal_repo, "lookup", lambda *a, **k: _async_value({}))
+    monkeypatch.setattr(ontology_rerun.proposal_repo, "upsert_many", lambda *a, **k: _async_value(None))
+
+    result = await ontology_rerun.rerun_column_ontology(
+        object(), study_id="s", file_key="upload.csv",
+        raw_column="Age_Band", old_field=None, new_field="age_group",
+    )
+
+    assert result == {"added": 1, "removed": 0}
+    assert inserted[0]["ontology_id"] == "NCIT:C17600"
 
 
 def test_value_forms_pairs_uploaded_and_inferred_spellings(monkeypatch, tmp_path):

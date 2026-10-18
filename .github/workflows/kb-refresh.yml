@@ -17,6 +17,13 @@ name: Knowledge Base Refresh
 # bundle (neither is rebuildable), refreshes the fetchable ontologies, and
 # verifies the result is a superset before republishing.
 #
+# The jobs, each under the 6-hour job limit, hand a packaged checkpoint on as
+# an artifact: `build` (the engine's own corpora, about 3 hours), `fields` (the
+# per-field corpora the target schemas' data dictionaries name, built into that
+# KB; `fields-more` continues if they do not all fit), and `publish`. The bundle
+# is published in parts under GitHub's 2 GiB release-asset limit, listed by
+# kb_offline_bundle.tar.gz.parts; its sha256 is the whole bundle's.
+#
 # Runs quarterly after the first end-to-end refresh and automated production
 # rollout were validated, and after an engine upgrade merges if upstream changed
 # code the KB build depends on. It can also be started manually for an urgent
@@ -26,9 +33,19 @@ on:
   workflow_dispatch:
     inputs:
       reuse_run_id:
-        description: "Prior KB refresh run whose pre-graft checkpoint should be reused"
+        description: "Prior KB refresh run whose checkpoint to reuse (its field-corpora checkpoint, else its engine-corpora one)"
         required: false
         type: string
+      fields_only:
+        description: "Rebuild only the per-field corpora, on the published engine corpora"
+        required: false
+        type: boolean
+        default: false
+      dry_run:
+        description: "Build and benchmark, but publish nothing (the candidate bundle is kept as an artifact)"
+        required: false
+        type: boolean
+        default: false
   schedule:
     - cron: "0 3 1 */3 *"   # quarterly at 03:00 UTC on Jan/Apr/Jul/Oct 1
   push:
@@ -52,6 +69,11 @@ jobs:
     timeout-minutes: 10
     outputs:
       refresh: ${{ steps.decide.outputs.refresh }}
+      build_base: ${{ steps.plan.outputs.build_base }}
+      build_fields: ${{ steps.plan.outputs.build_fields }}
+      base_run: ${{ steps.plan.outputs.base_run }}
+      base_artifact: ${{ steps.plan.outputs.base_artifact }}
+      fields_run: ${{ steps.plan.outputs.fields_run }}
     steps:
       - uses: actions/checkout@v5
 
@@ -95,17 +117,259 @@ jobs:
             echo "No KB code changed upstream (${OLD:0:12} → ${NEW:0:12}); the published KB stays." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-  refresh:
+      - name: Plan which checkpoints to build or reuse
+        id: plan
+        if: steps.decide.outputs.refresh == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REUSE_RUN_ID: ${{ inputs.reuse_run_id }}
+          FIELDS_ONLY: ${{ inputs.fields_only }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # plan <build engine corpora> <build field corpora> <run and artifact the
+          # fields job starts from> <run whose kb-fields checkpoint publish takes>
+          plan() {
+            { echo "build_base=$1"; echo "build_fields=$2"; echo "base_run=$3"; echo "base_artifact=$4"
+              echo "fields_run=$5"; } >> "$GITHUB_OUTPUT"
+          }
+          if [ -z "$REUSE_RUN_ID" ] && [ "$FIELDS_ONLY" = "true" ]; then
+            plan false true "" "published" "$RUN_ID"
+            echo "Rebuilding the per-field corpora on the published engine corpora." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ -z "$REUSE_RUN_ID" ]; then
+            plan true true "$RUN_ID" "kb-base-$RUN_ID" "$RUN_ID"
+            exit 0
+          fi
+          NAMES=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$REUSE_RUN_ID/artifacts" --paginate \
+            --jq '.artifacts[] | select(.expired | not) | .name')
+          if grep -qx "kb-fields-$REUSE_RUN_ID" <<< "$NAMES"; then
+            plan false false "$REUSE_RUN_ID" "" "$REUSE_RUN_ID"
+            echo "Reusing the field-corpora checkpoint of run $REUSE_RUN_ID." >> "$GITHUB_STEP_SUMMARY"
+          elif grep -qx "kb-fields-partial-$REUSE_RUN_ID" <<< "$NAMES"; then
+            plan false true "$REUSE_RUN_ID" "kb-fields-partial-$REUSE_RUN_ID" "$RUN_ID"
+            echo "Continuing the field corpora of run $REUSE_RUN_ID." >> "$GITHUB_STEP_SUMMARY"
+          elif grep -qx "kb-base-$REUSE_RUN_ID" <<< "$NAMES"; then
+            plan false true "$REUSE_RUN_ID" "kb-base-$REUSE_RUN_ID" "$RUN_ID"
+            echo "Reusing the engine-corpora checkpoint of run $REUSE_RUN_ID." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::Run $REUSE_RUN_ID has no unexpired KB checkpoint artifact."
+            exit 1
+          fi
+
+  build:
+    name: Build Engine Corpora
     needs: decide
-    if: needs.decide.outputs.refresh == 'true'
+    if: needs.decide.outputs.refresh == 'true' && needs.decide.outputs.build_base == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 300
     env:
       # Build into the repo checkout so package_kb finds the KB + corpus.
       KNOWLEDGE_DB_DIR: ${{ github.workspace }}/backend/kb_build
       METAHARMONIZER_DATA_DIR: ${{ github.workspace }}/backend/data
       # Optional: only adds synonym enrichment; the base build works without it.
       UMLS_API_KEY: ${{ secrets.UMLS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install backend + vendored engine wheel
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build the engine corpora (fetch ontologies + build FAISS indexes)
+        working-directory: backend
+        # NOTE: HF_HUB_OFFLINE is intentionally unset here so the embedding
+        # models download during the build; the bundle then ships them for
+        # offline runtime use.
+        run: python -m scripts.build_kb
+
+      - name: Warm schema model and persistent NCI cache
+        working-directory: backend
+        run: python -m scripts.warm_schema_cache
+
+      - name: Package the engine-corpora checkpoint
+        working-directory: backend
+        run: python -m scripts.package_kb -o "${{ runner.temp }}/kb-base-bundle.tar.gz"
+
+      - name: Upload the engine-corpora checkpoint
+        uses: actions/upload-artifact@v7
+        with:
+          name: kb-base-${{ github.run_id }}
+          path: ${{ runner.temp }}/kb-base-bundle.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  fields:
+    name: Build Field Corpora
+    needs: [decide, build]
+    if: >-
+      always()
+      && needs.decide.outputs.refresh == 'true'
+      && needs.decide.outputs.build_fields == 'true'
+      && (needs.build.result == 'success'
+          || (needs.build.result == 'skipped' && needs.decide.outputs.build_base == 'false'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    outputs:
+      complete: ${{ steps.build.outcome == 'success' }}
+    env:
+      KNOWLEDGE_DB_DIR: ${{ github.workspace }}/backend/kb_build
+      METAHARMONIZER_DATA_DIR: ${{ github.workspace }}/backend/data
+      UMLS_API_KEY: ${{ secrets.UMLS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install backend + vendored engine wheel
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Free runner disk for the KB
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Download the published bundle to build on
+        if: needs.decide.outputs.base_artifact == 'published'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/fetch_kb_release.sh "${{ runner.temp }}/kb-base"
+
+      - name: Download the checkpoint to build on
+        if: needs.decide.outputs.base_artifact != 'published'
+        uses: actions/download-artifact@v5
+        with:
+          name: ${{ needs.decide.outputs.base_artifact }}
+          path: ${{ runner.temp }}/kb-base
+          # Empty for this run's own checkpoint.
+          run-id: ${{ needs.decide.outputs.base_run != github.run_id && needs.decide.outputs.base_run || '' }}
+          github-token: ${{ github.token }}
+
+      - name: Restore the checkpoint
+        id: restore
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          bundle=$(ls "${{ runner.temp }}"/kb-base/*.tar.gz)
+          python -m scripts.seed_kb "$bundle" --force
+          rm -f "$bundle"
+
+      # Units already built (a partial checkpoint) are skipped. When the build
+      # step runs out of time, or a unit fails, the units built so far are
+      # packaged as kb-fields-partial-<run> and `fields-more` continues.
+      - name: Build the field corpora (the schemas' data dictionaries)
+        id: build
+        working-directory: backend
+        timeout-minutes: 290
+        continue-on-error: true
+        run: python -m scripts.build_kb --fields
+
+      - name: Package the field-corpora checkpoint
+        id: package
+        if: always() && steps.restore.outcome == 'success'
+        working-directory: backend
+        run: python -m scripts.package_kb -o "${{ runner.temp }}/kb-fields-bundle.tar.gz"
+
+      - name: Upload the field-corpora checkpoint
+        if: always() && steps.package.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.build.outcome == 'success' && 'kb-fields' || 'kb-fields-partial' }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/kb-fields-bundle.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Report field corpora left to build
+        if: steps.build.outcome != 'success'
+        run: echo "Some field corpora are not built yet; the next job continues from this checkpoint." >> "$GITHUB_STEP_SUMMARY"
+
+  fields-more:
+    name: Build Field Corpora (continued)
+    needs: [decide, fields]
+    if: always() && needs.fields.result == 'success' && needs.fields.outputs.complete == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      KNOWLEDGE_DB_DIR: ${{ github.workspace }}/backend/kb_build
+      METAHARMONIZER_DATA_DIR: ${{ github.workspace }}/backend/data
+      UMLS_API_KEY: ${{ secrets.UMLS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install backend + vendored engine wheel
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Free runner disk for the KB
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Download the partial field-corpora checkpoint
+        uses: actions/download-artifact@v5
+        with:
+          name: kb-fields-partial-${{ github.run_id }}
+          path: ${{ runner.temp }}/kb-partial
+
+      - name: Restore the checkpoint
+        working-directory: backend
+        run: |
+          python -m scripts.seed_kb "${{ runner.temp }}/kb-partial/kb-fields-bundle.tar.gz" --force
+          rm -f "${{ runner.temp }}/kb-partial/kb-fields-bundle.tar.gz"
+
+      - name: Build the remaining field corpora
+        id: build
+        working-directory: backend
+        timeout-minutes: 290
+        run: python -m scripts.build_kb --fields
+
+      - name: Package the field-corpora checkpoint
+        working-directory: backend
+        run: python -m scripts.package_kb -o "${{ runner.temp }}/kb-fields-bundle.tar.gz"
+
+      - name: Upload the field-corpora checkpoint
+        uses: actions/upload-artifact@v7
+        with:
+          name: kb-fields-${{ github.run_id }}
+          path: ${{ runner.temp }}/kb-fields-bundle.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    name: Publish the KB
+    needs: [decide, fields, fields-more]
+    if: >-
+      always()
+      && needs.decide.outputs.refresh == 'true'
+      && ((needs.fields.result == 'success' && needs.fields.outputs.complete == 'true')
+          || needs.fields-more.result == 'success'
+          || (needs.fields.result == 'skipped' && needs.decide.outputs.build_fields == 'false'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      KNOWLEDGE_DB_DIR: ${{ github.workspace }}/backend/kb_build
+      METAHARMONIZER_DATA_DIR: ${{ github.workspace }}/backend/data
       HAS_AUTOMATION_APP: ${{ secrets.AUTOMATION_APP_ID != '' }}
     steps:
       - uses: actions/checkout@v5
@@ -120,12 +384,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Free runner disk for the KB
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - name: Fetch the current published bundle (source of EFO + warmed cache)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p /tmp/cur
-          gh release download kb-latest -p kb_offline_bundle.tar.gz -D /tmp/cur
+        run: bash scripts/fetch_kb_release.sh /tmp/cur
 
       - name: Identify the current published bundle
         id: current_sha
@@ -151,47 +418,20 @@ jobs:
             --out "${{ runner.temp }}/kb-benchmark/before-rows.csv" \
             --summary-json "${{ runner.temp }}/kb-benchmark/before-summary.json"
 
-      - name: Build the KB (fetch ontologies + build FAISS indexes)
-        if: inputs.reuse_run_id == ''
-        working-directory: backend
-        # NOTE: HF_HUB_OFFLINE is intentionally unset here so the embedding
-        # models download during the build; the bundle then ships them for
-        # offline runtime use.
-        run: python -m scripts.build_kb
-
-      - name: Warm schema model and persistent NCI cache
-        if: inputs.reuse_run_id == ''
-        working-directory: backend
-        run: python -m scripts.warm_schema_cache
-
-      - name: Package pre-graft checkpoint
-        if: inputs.reuse_run_id == ''
-        working-directory: backend
-        run: python -m scripts.package_kb -o "${{ runner.temp }}/kb-base-bundle.tar.gz"
-
-      - name: Upload pre-graft checkpoint
-        if: inputs.reuse_run_id == ''
-        uses: actions/upload-artifact@v7
+      - name: Download the field-corpora checkpoint
+        uses: actions/download-artifact@v5
         with:
-          name: kb-base-${{ github.run_id }}
-          path: ${{ runner.temp }}/kb-base-bundle.tar.gz
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 7
+          name: kb-fields-${{ needs.decide.outputs.fields_run }}
+          path: ${{ runner.temp }}/kb-fields
+          # Empty for this run's own checkpoint.
+          run-id: ${{ needs.decide.outputs.fields_run != github.run_id && needs.decide.outputs.fields_run || '' }}
+          github-token: ${{ github.token }}
 
-      - name: Restore a prior pre-graft checkpoint
-        if: inputs.reuse_run_id != ''
+      - name: Restore the field-corpora checkpoint
         working-directory: backend
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REUSE_RUN_ID: ${{ inputs.reuse_run_id }}
         run: |
-          mkdir -p "${{ runner.temp }}/kb-base"
-          gh run download "$REUSE_RUN_ID" \
-            --name "kb-base-$REUSE_RUN_ID" \
-            --dir "${{ runner.temp }}/kb-base"
-          python -m scripts.seed_kb \
-            "${{ runner.temp }}/kb-base/kb-base-bundle.tar.gz" --force
+          python -m scripts.seed_kb "${{ runner.temp }}/kb-fields/kb-fields-bundle.tar.gz" --force
+          rm -f "${{ runner.temp }}/kb-fields/kb-fields-bundle.tar.gz"
 
       - name: Graft EFO + warmed schema cache forward (not rebuildable)
         working-directory: backend
@@ -201,9 +441,9 @@ jobs:
         working-directory: backend
         run: python -m scripts.package_kb -o ../kb/kb_offline_bundle.tar.gz
 
-      - name: Verify the bundle is a superset (EFO + 4 corpora + KB + models)
+      - name: Verify the bundle is a superset (EFO + 5 corpora + field corpora + KB + models)
         run: |
-          python -c "import sys,tarfile; n=set(tarfile.open('kb/kb_offline_bundle.tar.gz').getnames()); req={'kb.mhkb.tar.gz','corpus/retrieved_ontologies/efo_phenotype_corpus.csv','corpus/retrieved_ontologies/ncit_disease_corpus.csv','corpus/retrieved_ontologies/ncit_treatment_corpus.csv','corpus/retrieved_ontologies/uberon_bodysite_corpus.csv'}; tops={x.split('/')[0] for x in n}; miss=[r for r in req if r not in n]+[t for t in ('model_cache','hf_hub') if t not in tops]; sys.exit('NOT A SUPERSET: %s' % miss) if miss else print('verified superset: EFO + 4 corpora + KB + models')"
+          python -c "import sys,tarfile; n=set(tarfile.open('kb/kb_offline_bundle.tar.gz').getnames()); req={'kb.mhkb.tar.gz','corpus/retrieved_ontologies/efo_phenotype_corpus.csv','corpus/retrieved_ontologies/ncit_disease_corpus.csv','corpus/retrieved_ontologies/ncit_treatment_corpus.csv','corpus/retrieved_ontologies/uberon_bodysite_corpus.csv','corpus/retrieved_ontologies/ncit_bodysite_corpus.csv','corpus/fields/units.json'}; tops={x.split('/')[0] for x in n}; miss=[r for r in req if r not in n]+[t for t in ('model_cache','hf_hub') if t not in tops]; sys.exit('NOT A SUPERSET: %s' % miss) if miss else print('verified superset: EFO + 5 corpora + field corpora + KB + models')"
 
       - name: Compute sha256
         id: sha
@@ -267,24 +507,50 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      - name: Republish to the kb-latest release
+      - name: Keep the candidate bundle (dry run)
+        if: inputs.dry_run
+        uses: actions/upload-artifact@v7
+        with:
+          name: kb-candidate-${{ github.run_id }}
+          path: |
+            kb/kb_offline_bundle.tar.gz
+            kb/kb_offline_bundle.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Republish to the kb-latest release (in parts under 2 GiB)
+        if: ${{ !inputs.dry_run }}
+        working-directory: kb
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release upload kb-latest
-          kb/kb_offline_bundle.tar.gz
-          kb/kb_offline_bundle.sha256
-          --clobber
+        run: |
+          set -euo pipefail
+          split -b 1900m -d -a 2 kb_offline_bundle.tar.gz kb_offline_bundle.tar.gz.part
+          ls kb_offline_bundle.tar.gz.part?? > kb_offline_bundle.tar.gz.parts
+          gh release upload kb-latest kb_offline_bundle.tar.gz.part?? --clobber
+          gh release upload kb-latest kb_offline_bundle.tar.gz.parts kb_offline_bundle.sha256 --clobber
+          # Drop the previous publication's leftovers: the whole bundle (now in
+          # parts) and parts beyond the new count.
+          gh release view kb-latest --json assets --jq '.assets[].name' | while read -r name; do
+            case "$name" in
+              kb_offline_bundle.tar.gz)
+                gh release delete-asset kb-latest "$name" --yes ;;
+              kb_offline_bundle.tar.gz.part[0-9][0-9])
+                grep -qxF "$name" kb_offline_bundle.tar.gz.parts || gh release delete-asset kb-latest "$name" --yes ;;
+            esac
+          done
 
       - name: Mint the automation App token
         id: app
-        if: env.HAS_AUTOMATION_APP == 'true'
+        if: env.HAS_AUTOMATION_APP == 'true' && !inputs.dry_run
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.AUTOMATION_APP_ID }}
           private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
 
       - name: Open a PR bumping KB_BUNDLE_SHA256
+        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
           ISSUE_GH_TOKEN: ${{ github.token }}

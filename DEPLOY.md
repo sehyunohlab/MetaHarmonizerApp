@@ -113,10 +113,14 @@ cold machine. Its exact prerequisite order is:
 cd backend
 pip install -r requirements.txt
 python -m scripts.build_kb
+python -m scripts.build_kb --fields
 python -m scripts.warm_schema_cache
 python -m scripts.package_kb -o ../kb/kb_offline_bundle.tar.gz
 ```
 
+`build_kb --fields` adds the per-field corpora the target schemas' data
+dictionaries name (for example every NCIt *Disease or Disorder* term for the
+lab's disease fields); it fails if any of them cannot be built.
 `package_kb` fails unless all three required ontology corpora, their FAISS
 indexes and ID sidecars, the engine database, both embedding models, and the
 warmed schema cache exist. Use `--allow-incomplete` only for an explicitly
@@ -180,7 +184,11 @@ the host and allow inbound TCP 80/443.
 ### Automatic KB rollout
 
 After the hosted KB refresh passes its superset and accuracy gates, it publishes
-`kb_offline_bundle.tar.gz` and `kb_offline_bundle.sha256` to `kb-latest`.
+the bundle to `kb-latest` in parts under GitHub's 2 GiB asset limit
+(`kb_offline_bundle.tar.gz.part00`, `.part01`, …, listed in order by
+`kb_offline_bundle.tar.gz.parts`) with `kb_offline_bundle.sha256`, the whole
+bundle's checksum. The importer and the rollout below join the parts and verify
+that checksum; a release with a single `kb_offline_bundle.tar.gz` still works.
 Production can poll that release hourly without storing an SSH key in GitHub:
 
 ```bash
