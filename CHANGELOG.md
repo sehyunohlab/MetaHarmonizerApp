@@ -192,12 +192,12 @@ versioning once a stable `1.x` release is declared.
   value dictionary. These corpora are built into the KB (`build_kb --fields`)
   and used once the KB holds them.
 - Body sites in schemas whose dictionary lists no body-site terms (the
-  cBioPortal schemas, GDC) map to NCIt body parts, the engine's default
-  ontology and the lab's: 99.9% of the body-site terms in its cBioPortal
-  release are NCIt. On the lab's cBioPortal body-site curation map, the first
-  term's id matches the lab's for 32.2% of values with NCIt, against 0.3% with
-  UBERON (half the map's values are curated as several terms, such as an organ
-  plus *Left*).
+  cBioPortal schemas, GDC) keep the engine's UBERON anatomy. The engine's
+  NCIt body-site corpus (NCIt *Body Part*), briefly used instead, holds organ
+  parts but not the organs: `Lung` matched *Respiratory System Part* and
+  `Liver` *Liver Lobe*. The lab's cBioPortal release codes body sites in NCIt
+  organ terms (*Lung*, *Liver*), which no corpus the lab's dictionary or the
+  engine names covers yet.
 - Fields that only the ontology engine maps (such as `primary_site`) were not
   mapped again when a curator moved a column into them, and their values were
   left out when a study's ontology results came from the proposal cache.

@@ -21,7 +21,6 @@ import pandas as pd
 
 from .kb_assets import (
     REQUIRED_ONTOLOGY_TUPLES,
-    engine_corpus_installed,
     installed_kb_issues,
     runtime_engine_required,
     runtime_ontology_required,
@@ -43,9 +42,10 @@ def _auto_accept_threshold() -> float:
 
 # Dashboard field name (lower) → engine ontology (category, source) for a field
 # its target schema's data dictionary names no corpus for (see
-# ``_field_corpora``), limited to the engine's own corpora. Body sites use NCIt
-# body parts: the engine's default ontology and the lab's (99.9% of the body_site
-# terms in its cBioPortal release); cMD's dictionary lists UBERON terms instead.
+# ``_field_corpora``), limited to the engine's own corpora. Body sites use the
+# engine's UBERON anatomy: its NCIt body-site corpus (root NCIT:C32221 Body
+# Part) holds organ parts but not the organs themselves (no Lung, Liver,
+# Kidney or Breast), so common values matched the wrong term.
 # Excluded on purpose: GDC ``treatment_or_therapy`` (yes/no/unknown) and
 # ``morphology`` (ICD-O codes such as 8000/0) are not term vocabularies.
 FIELD_ONTOLOGY: dict[str, tuple[str, str]] = {
@@ -55,11 +55,11 @@ FIELD_ONTOLOGY: dict[str, tuple[str, str]] = {
     "primary_diagnosis": ("disease", "ncit"),
     "primary_disease": ("disease", "ncit"),
     "disease_type": ("disease", "ncit"),
-    "body_site": ("bodysite", "ncit"),
-    "primary_site": ("bodysite", "ncit"),
-    "tissue_or_organ_of_origin": ("bodysite", "ncit"),
-    "site_of_resection_or_biopsy": ("bodysite", "ncit"),
-    "biospecimen_anatomic_site": ("bodysite", "ncit"),
+    "body_site": ("bodysite", "uberon"),
+    "primary_site": ("bodysite", "uberon"),
+    "tissue_or_organ_of_origin": ("bodysite", "uberon"),
+    "site_of_resection_or_biopsy": ("bodysite", "uberon"),
+    "biospecimen_anatomic_site": ("bodysite", "uberon"),
     "treatment": ("treatment", "ncit"),
     "treatment_name": ("treatment", "ncit"),
     "treatment_type": ("treatment", "ncit"),
@@ -296,12 +296,8 @@ def map_values_via_engine(
 
 
 def _engine_corpus(field_name: str) -> tuple[str, str]:
-    """The engine corpus for a field without a dictionary corpus. A body-site
-    field uses UBERON when the KB has no NCIt body-part corpus yet."""
-    category, source = FIELD_ONTOLOGY[field_name]
-    if category == "bodysite" and source == "ncit" and not engine_corpus_installed(category, source):
-        return category, "uberon"
-    return category, source
+    """The engine corpus for a field without a dictionary corpus."""
+    return FIELD_ONTOLOGY[field_name]
 
 
 @lru_cache(maxsize=32)
