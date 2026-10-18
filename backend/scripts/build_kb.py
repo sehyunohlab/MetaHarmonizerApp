@@ -91,15 +91,27 @@ def _verify_outputs(category: str, source: str) -> None:
 
 
 def _build_fields() -> int:
-    """Build the units of every installed target schema's data dictionary.
-    Fail-closed: a unit that cannot be built (after the fetch retries) fails
-    the build rather than ship a KB that silently lacks it."""
+    """Build the units of every installed target schema's data dictionary,
+    after any engine corpus the KB should hold but lacks (a KB seeded from an
+    older bundle). Fail-closed: a unit that cannot be built (after the fetch
+    retries) fails the build rather than ship a KB that silently lacks it."""
     from app.engine_adapter import _field_corpora, _schema_registry
+    from app.engine_adapter.kb_assets import engine_corpus_installed
+
+    failures = 0
+    for category, source in KB_ONTOLOGY_TUPLES:
+        if engine_corpus_installed(category, source):
+            continue
+        logger.info("building the missing engine corpus %s/%s …", category, source)
+        try:
+            _build_one(category, source, _PROBE)
+        except Exception:  # noqa: BLE001 — report and continue with the units
+            failures += 1
+            logger.exception("FAILED to build %s/%s", category, source)
 
     keys = sorted(key for key, schema in _schema_registry._discover().items() if schema.get("dictionary_path"))
     units = [unit for unit in _field_corpora.schema_units(keys) if unit.official is None]
     logger.info("building %d field corpus unit(s) for %s", len(units), ", ".join(keys))
-    failures = 0
     for unit in units:
         t0 = time.perf_counter()
         try:
