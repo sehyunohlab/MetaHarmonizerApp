@@ -1,18 +1,20 @@
 """Build the ontology knowledge DB (SQLite corpus + FAISS indexes) offline.
 
-Builds the app's first-class launch tuples by triggering the engine's own
-corpus+index build (``OntoMapEngine.run`` builds on a cache miss, then persists
-to ``KNOWLEDGE_DB_DIR``). Run this ONCE on a capable machine, then distribute the
-result with ``python -m metaharmonizer.scripts.knowledge_db export`` — never
-build on a small production VM.
+Builds the app's engine corpora by triggering the engine's own corpus+index
+build (``OntoMapEngine.run`` builds on a cache miss, then persists to
+``KNOWLEDGE_DB_DIR``); with ``--fields``, the per-field corpora the target
+schemas' data dictionaries name instead (``app.engine_adapter._field_corpora``).
+Run this ONCE on a capable machine, then distribute the result with
+``scripts/package_kb.py`` — never build on a small production VM.
 
-Corpora fetch key-free (NCIt via EVSREST, UBERON via OLS4). ``UMLS_API_KEY`` only
-adds optional synonym enrichment.
+Corpora fetch key-free (NCIt via EVSREST, UBERON / MONDO via OLS4).
+``UMLS_API_KEY`` only adds optional synonym enrichment.
 
 Usage::
 
-    python -m scripts.build_kb                       # all launch tuples
-    python -m scripts.build_kb --only disease/ncit   # one tuple
+    python -m scripts.build_kb                       # all engine corpora
+    python -m scripts.build_kb --only disease/ncit   # one engine corpus
+    python -m scripts.build_kb --fields              # the schemas' per-field corpora
     KNOWLEDGE_DB_DIR=/data/kb python -m scripts.build_kb
 
 This is an offline build tool (not app runtime), so it may import the engine
@@ -26,7 +28,7 @@ import logging
 import time
 
 from app.engine_adapter.kb_assets import (
-    REQUIRED_ONTOLOGY_TUPLES,
+    KB_ONTOLOGY_TUPLES,
     installed_kb_issues,
 )
 
@@ -35,7 +37,7 @@ from app.engine_adapter.kb_assets import (
 # otherwise Stage 1 short-circuits and Stage 2 (which builds the FAISS index) is
 # skipped, leaving an index-less KB. A deliberately non-label probe forces Stage 2.
 _PROBE = "kb build probe do not match"
-LAUNCH_TUPLES = [(category, source, _PROBE) for category, source in REQUIRED_ONTOLOGY_TUPLES]
+LAUNCH_TUPLES = [(category, source, _PROBE) for category, source in KB_ONTOLOGY_TUPLES]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("build_kb")
@@ -88,13 +90,67 @@ def _verify_outputs(category: str, source: str) -> None:
             raise RuntimeError(f"missing/empty ids sidecar for {idx.name} — partial build.")
 
 
+def _build_fields() -> int:
+    """Build the units of every installed target schema's data dictionary,
+    after any engine corpus the KB should hold but lacks (a KB seeded from an
+    older bundle). Fail-closed: a unit that cannot be built (after the fetch
+    retries) fails the build rather than ship a KB that silently lacks it."""
+    from app.engine_adapter import _field_corpora, _schema_registry
+    from app.engine_adapter.kb_assets import engine_corpus_installed
+
+    failures = 0
+    for category, source in KB_ONTOLOGY_TUPLES:
+        if engine_corpus_installed(category, source):
+            continue
+        logger.info("building the missing engine corpus %s/%s …", category, source)
+        try:
+            _build_one(category, source, _PROBE)
+        except Exception:  # noqa: BLE001 — report and continue with the units
+            failures += 1
+            logger.exception("FAILED to build %s/%s", category, source)
+
+    keys = sorted(key for key, schema in _schema_registry._discover().items() if schema.get("dictionary_path"))
+    units = [unit for unit in _field_corpora.schema_units(keys) if unit.official is None]
+    logger.info("building %d field corpus unit(s) for %s", len(units), ", ".join(keys))
+    for unit in units:
+        t0 = time.perf_counter()
+        try:
+            entry = _field_corpora.build_units([unit]).get(unit.key, {})
+        except Exception:  # noqa: BLE001 — report and continue with the next unit
+            failures += 1
+            logger.exception("FAILED to build unit %s", unit.key)
+            continue
+        logger.info(
+            "built unit %s (%s terms) in %.1fs",
+            unit.key, entry.get("rows", "?"), time.perf_counter() - t0,
+        )
+    unbuilt = [
+        unit.key
+        for unit in units
+        if not _field_corpora.installed(unit)
+        and (_field_corpora.read_manifest().get("units", {}).get(unit.key) or {}).get("rows") != 0
+    ]
+    if failures or unbuilt:
+        logger.error("%d unit(s) failed; not installed: %s", failures, ", ".join(unbuilt) or "-")
+        return 1
+    logger.info("done — %d field corpus unit(s) built", len(units))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Build the ontology knowledge DB.")
     parser.add_argument(
         "--only",
         help="Build a single 'category/source' tuple (e.g. disease/ncit).",
     )
+    parser.add_argument(
+        "--fields",
+        action="store_true",
+        help="Build the per-field corpora the target schemas' data dictionaries name.",
+    )
     args = parser.parse_args(argv)
+    if args.fields:
+        return _build_fields()
 
     tuples = LAUNCH_TUPLES
     if args.only:

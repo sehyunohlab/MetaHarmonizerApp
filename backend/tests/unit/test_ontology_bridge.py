@@ -26,10 +26,10 @@ def test_engine_enabled_reads_env(monkeypatch):
 
 
 def test_field_ontology_only_engine_ready_tuples():
-    # NCIt-disease + UBERON-bodysite (+ NCIt-treatment) are first-class; EFO /
+    # NCIt disease, body parts and treatment are the engine's own corpora; EFO /
     # HANCESTRO must NOT be wired here (engine-team scope).
     assert _ontology.FIELD_ONTOLOGY["disease"] == ("disease", "ncit")
-    assert _ontology.FIELD_ONTOLOGY["body_site"] == ("bodysite", "uberon")
+    assert _ontology.FIELD_ONTOLOGY["body_site"] == ("bodysite", "ncit")
     assert "ancestry" not in _ontology.FIELD_ONTOLOGY
     assert "hla" not in _ontology.FIELD_ONTOLOGY
 
@@ -40,10 +40,10 @@ def test_field_ontology_covers_gdc_and_cbioportal_field_names():
         "primary_diagnosis": ("disease", "ncit"),
         "primary_disease": ("disease", "ncit"),
         "disease_type": ("disease", "ncit"),
-        "primary_site": ("bodysite", "uberon"),
-        "tissue_or_organ_of_origin": ("bodysite", "uberon"),
-        "site_of_resection_or_biopsy": ("bodysite", "uberon"),
-        "biospecimen_anatomic_site": ("bodysite", "uberon"),
+        "primary_site": ("bodysite", "ncit"),
+        "tissue_or_organ_of_origin": ("bodysite", "ncit"),
+        "site_of_resection_or_biopsy": ("bodysite", "ncit"),
+        "biospecimen_anatomic_site": ("bodysite", "ncit"),
         "therapeutic_agents": ("treatment", "ncit"),
     }
     for field, tuple_ in expected.items():
@@ -204,3 +204,16 @@ def test_map_values_does_not_construct_engine_when_runtime_assets_are_missing(
 
     assert rows == []
     assert handled == set()
+
+
+@pytest.mark.parametrize(("ncit_installed", "source"), [(True, "ncit"), (False, "uberon")])
+def test_body_sites_use_ncit_body_parts_once_the_kb_has_them(monkeypatch, ncit_installed, source):
+    # Until the KB ships the NCIt body-part corpus, body sites keep UBERON.
+    monkeypatch.setattr(
+        _ontology,
+        "engine_corpus_installed",
+        lambda category, source_: ncit_installed and (category, source_) == ("bodysite", "ncit"),
+    )
+
+    assert _ontology._engine_corpus("primary_site") == ("bodysite", source)
+    assert _ontology._engine_corpus("disease") == ("disease", "ncit")

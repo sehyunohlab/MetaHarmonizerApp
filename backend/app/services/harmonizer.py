@@ -310,13 +310,18 @@ def _load_field_value_dict() -> dict[str, list[str]]:
     return _cached_field_value_dict
 
 
-def supports_ontology_mapping(field: str | None) -> bool:
+def supports_ontology_mapping(field: str | None, target_schema: str | None = None) -> bool:
+    """True when a field's values are mapped to ontology terms: by the value
+    dictionary, or by the ontology engine (an engine corpus for the field, or
+    one its target schema's data dictionary declares)."""
     if not field:
         return False
     key = _normalise(field)
-    return key in ONTOLOGY_MAP or key in {
-        _normalise(name) for name in _load_field_value_dict()
-    }
+    if key in ONTOLOGY_MAP or key in {_normalise(name) for name in _load_field_value_dict()}:
+        return True
+    from app.engine_adapter import is_ontology_field
+
+    return is_ontology_field(field, target_schema)
 
 
 def _resolve_ncit_id(term: str, nci_term2code: dict, field: str) -> str | None:

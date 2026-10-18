@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -97,8 +98,33 @@ def _install_tree(src_root: Path, dst_root: Path, force: bool, *, label: str) ->
         print(f"[seed] {label}: already present at {dst_root} (use --force to overwrite)")
 
 
+_PART_NAME = re.compile(r"^[A-Za-z0-9._-]+\.part\d{2}$")
+
+
+def _part_urls(url: str) -> list[str] | None:
+    """The part URLs of a bundle published in parts (GitHub release assets are
+    capped at 2 GiB): ``<bundle>.parts`` lists them in order. None when the
+    bundle is published whole."""
+    import urllib.error
+    import urllib.request
+
+    req = urllib.request.Request(url + ".parts", headers={"User-Agent": "metaharmonizer-seed-kb"})
+    try:
+        with urllib.request.urlopen(req) as resp:  # noqa: S310
+            names = resp.read().decode("utf-8").split()
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return None
+        raise
+    if not names or not all(_PART_NAME.match(name) for name in names):
+        raise RuntimeError(f"invalid parts list at {url}.parts: {names}")
+    base = url.rsplit("/", 1)[0]
+    return [f"{base}/{name}" for name in names]
+
+
 def _download(url: str, dest: Path, *, sha256: str | None = None) -> None:
-    """Stream the bundle from ``url`` to ``dest`` (atomic, optional sha256 check).
+    """Stream the bundle from ``url`` (or its parts, in order) to ``dest``
+    (atomic, optional sha256 check of the whole bundle).
 
     Standard-library only, so it works in a bare container with no extra deps.
     Writes to a ``.part`` file and renames on success, so an interrupted run
@@ -109,28 +135,32 @@ def _download(url: str, dest: Path, *, sha256: str | None = None) -> None:
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_name(dest.name + ".part")
-    print(f"[seed] downloading bundle from {url}")
+    urls = _part_urls(url) or [url]
+    print(f"[seed] downloading bundle from {url}" + (f" in {len(urls)} parts" if len(urls) > 1 else ""))
     digest = hashlib.sha256()
     done = 0
-    req = urllib.request.Request(url, headers={"User-Agent": "metaharmonizer-seed-kb"})
-    with urllib.request.urlopen(req) as resp, open(tmp, "wb") as fh:  # noqa: S310
-        total = int(resp.headers.get("Content-Length") or 0)
-        while True:
-            chunk = resp.read(1 << 20)  # 1 MiB
-            if not chunk:
-                break
-            fh.write(chunk)
-            digest.update(chunk)
-            done += len(chunk)
+    with open(tmp, "wb") as fh:
+        for part_url in urls:
+            req = urllib.request.Request(part_url, headers={"User-Agent": "metaharmonizer-seed-kb"})
+            with urllib.request.urlopen(req) as resp:  # noqa: S310
+                total = int(resp.headers.get("Content-Length") or 0)
+                start = done
+                while True:
+                    chunk = resp.read(1 << 20)  # 1 MiB
+                    if not chunk:
+                        break
+                    fh.write(chunk)
+                    digest.update(chunk)
+                    done += len(chunk)
+                    if total:
+                        print(
+                            f"\r[seed]   {(done - start) // (1 << 20)}/{total // (1 << 20)} MiB "
+                            f"({(done - start) * 100 // total}%)",
+                            end="",
+                            flush=True,
+                        )
             if total:
-                print(
-                    f"\r[seed]   {done // (1 << 20)}/{total // (1 << 20)} MiB "
-                    f"({done * 100 // total}%)",
-                    end="",
-                    flush=True,
-                )
-    if total:
-        print()
+                print()
     if sha256 and digest.hexdigest().lower() != sha256.strip().lower():
         tmp.unlink(missing_ok=True)
         raise RuntimeError(
@@ -176,6 +206,11 @@ def seed(bundle: Path, *, force: bool, allow_incomplete: bool = False) -> int:
                     continue
                 shutil.copy2(csv, dst)
                 print(f"[seed] corpus -> {dst}")
+
+        # Per-field corpora (their tables and indexes came with the engine KB).
+        from app.engine_adapter._field_corpora import units_dir
+
+        _install_tree(tmp_path / "corpus" / "fields", units_dir(), force, label="field corpora")
 
         # Warmed schema cache -> backend/data so the schema stage starts warm.
         src_cache = tmp_path / "nci_schema_cache.json"

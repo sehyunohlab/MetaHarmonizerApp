@@ -5,8 +5,10 @@ lab's curated cBioPortal vocabulary: OmicsMLRepoData's
 ``inst/extdata/cBioPortal_data_dictionary.csv``. This downloads that file and
 regenerates what the schema mapper reads from it:
 
-- ``omicsmlprepo_cbio_schema.csv``: the dictionary, byte for byte, with its
-  commit in ``omicsmlprepo_cbio_dictionary.meta.json``;
+- ``omicsmlprepo_cbio_schema.csv``: the dictionary, with every list cell
+  delimited by "|" as the lab's schema registry writes them (see
+  :data:`LIST_COLUMNS`); its commit and both files' git blobs are in
+  ``omicsmlprepo_cbio_dictionary.meta.json``;
 - ``omicsmlprepo_cbio_target_attrs.csv``: ``field_name,is_numeric_field``
   (numeric when ``col.class`` is ``numeric``);
 - ``omicsmlprepo_cbio_target_attrs_allowed_values.json``: each field's listed
@@ -57,6 +59,44 @@ def _github(path: str, *, raw: bool = False) -> bytes:
 
 def _blob_sha(data: bytes) -> str:
     return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+# The lab's schema registry (shbrief/MetaHarmonizerSchemaRegistry, scripts/README.md):
+# "`|` is the single list delimiter across the schema: enum `allowedvalues`,
+# positional `static.enum` ids, multi-node `dynamic.enum` roots, and compound
+# `corpus.type` tokens all use it. (`;`/`<;>` in the `delimiter`/`separator`
+# columns are data-cell separators, unrelated.)" The OmicsMLRepoData dictionary
+# still writes some lists with ";" (dynamic.enum "NCIT:C7057;EFO_0000408"), which
+# the engine's corpus builder would read as one root.
+LIST_COLUMNS = ("allowedvalues", "static.enum", "dynamic.enum", "corpus.type")
+# A regex allowedvalues cell, where "|" is alternation (the engine's
+# combined_corpus_builder._ALLOWEDVALUES_REGEX_RE).
+_REGEX = re.compile(r"^\^|\$$|\[|\]|\{|\}|\+")
+
+
+def standardize_lists(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """The rows with every list cell delimited by "|", as the registry writes them."""
+    out = []
+    for row in rows:
+        row = dict(row)
+        for column in LIST_COLUMNS:
+            value = row.get(column) or ""
+            if value in ("", "NA") or (column == "allowedvalues" and _REGEX.search(value)):
+                continue
+            row[column] = "|".join(part.strip() for part in value.split(";"))
+        out.append(row)
+    return out
+
+
+def to_csv_text(header: list[str], rows: list[dict[str, str]]) -> str:
+    """The dictionary as R's write.csv writes it: strings quoted, NA and logicals not."""
+
+    def cell(value: str) -> str:
+        return value if value in ("NA", "TRUE", "FALSE") else '"' + value.replace('"', '""') + '"'
+
+    lines = [",".join(cell(name) for name in header)]
+    lines += [",".join(cell(row[name]) for name in header) for row in rows]
+    return "\n".join(lines) + "\n"
 
 
 def _engine_values() -> dict[str, list[str]]:
@@ -114,17 +154,21 @@ def main(argv: list[str] | None = None) -> int:
 
     data = _github(f"contents/{DICTIONARY}?ref={ref}", raw=True)
     commit = json.loads(_github(f"commits?path={DICTIONARY}&sha={ref}&per_page=1"))[0]
-    rows = list(csv.DictReader(io.StringIO(data.decode("utf-8"))))
+    reader = csv.DictReader(io.StringIO(data.decode("utf-8")))
+    rows = standardize_lists(list(reader))
     fields = [row["col.name"] for row in rows]
+    standardized = to_csv_text(list(reader.fieldnames or []), rows).encode("utf-8")
 
-    (REGISTRY / f"{PREFIX}_schema.csv").write_bytes(data)
+    (REGISTRY / f"{PREFIX}_schema.csv").write_bytes(standardized)
     (REGISTRY / f"{PREFIX}_dictionary.meta.json").write_text(
         json.dumps(
             {
                 "source": f"https://github.com/{REPO}/blob/{commit['sha']}/{DICTIONARY}",
                 "commit": commit["sha"],
                 "committed": commit["commit"]["committer"]["date"],
-                "blob": _blob_sha(data),
+                "source_blob": _blob_sha(data),
+                "blob": _blob_sha(standardized),
+                "lists": "| (MetaHarmonizerSchemaRegistry)",
                 "fields": len(fields),
             },
             indent=2,

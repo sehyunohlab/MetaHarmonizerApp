@@ -14,6 +14,7 @@ This script rolls everything a fresh instance needs into one bundle:
 
     kb.mhkb.tar.gz                      # engine KB (sqlite + faiss indexes)
     corpus/retrieved_ontologies/*.csv   # corpus CSVs the engine loads offline
+    corpus/fields/*                     # per-field corpora of the schemas' dictionaries + units.json
     nci_schema_cache.json               # warmed schema value→field cache
     model_cache/**                      # engine ontology models (e.g. sap-bert)
     hf_hub/**                           # schema model HF snapshot (all-MiniLM-L6-v2)
@@ -70,6 +71,17 @@ def _corpus_csvs() -> list[Path]:
     if not RETRIEVED_ONTOLOGIES_DIR.exists():
         return []
     return sorted(RETRIEVED_ONTOLOGIES_DIR.glob("*_corpus.csv"))
+
+
+def _field_corpus_files() -> list[Path]:
+    """The per-field corpora ``scripts.build_kb --fields`` wrote: each unit's
+    CSV and the manifest (their tables and indexes are in the engine KB)."""
+    from app.engine_adapter._field_corpora import MANIFEST, units_dir
+
+    root = units_dir()
+    if not (root / MANIFEST).is_file():
+        return []
+    return [root / MANIFEST, *sorted(root.glob("*_corpus.csv"))]
 
 
 def _is_download_temp(path: Path, root: Path) -> bool:
@@ -158,6 +170,7 @@ def build_bundle(
 ) -> int:
     # Resolve everything first so --dry-run can report without exporting the KB.
     csvs = _corpus_csvs()
+    fields = _field_corpus_files()
     mc_root, mc_files = _model_cache_files()
     hf_root, hf_files = _hf_schema_model()
     issues = installed_kb_issues()
@@ -182,6 +195,8 @@ def build_bundle(
         print("[package] DRY RUN — would bundle:")
         print("  kb.mhkb.tar.gz          (engine KB export, size TBD)")
         print(f"  corpus CSVs             {len(csvs)} files, {_human(cs_sz)}")
+        print(f"  corpus/fields/          {len(fields)} files, "
+              f"{_human(sum(p.stat().st_size for p in fields))}")
         print(f"  nci_schema_cache.json   {'present' if _SCHEMA_CACHE.exists() else 'absent'}")
         print(f"  model_cache/            {len(mc_files)} files, {_human(mc_sz)}  (from {mc_root})")
         print(f"  hf_hub/{_SCHEMA_HF_DIR}  {len(hf_files)} files, {_human(hf_sz)}  (from {hf_root})")
@@ -198,6 +213,10 @@ def build_bundle(
             for csv in csvs:
                 tar.add(csv, arcname=f"corpus/retrieved_ontologies/{csv.name}")
                 print(f"[package] + corpus/{csv.name}")
+            for path in fields:
+                tar.add(path, arcname=f"corpus/fields/{path.name}")
+            if fields:
+                print(f"[package] + corpus/fields/ ({len(fields)} files)")
             if _SCHEMA_CACHE.exists():
                 tar.add(_SCHEMA_CACHE, arcname="nci_schema_cache.json")
                 print(f"[package] + nci_schema_cache.json "

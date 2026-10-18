@@ -160,7 +160,9 @@ def _run_pipeline(
                 schema_for_onto = [
                     m for m in schema_all if m.get("raw_column") in scope
                 ]
-            onto_results = get_engine().map_values(raw_df, schema_for_onto) or []
+            onto_results = (
+                get_engine().map_values(raw_df, schema_for_onto, target_schema=target_schema) or []
+            )
 
         return {
             "schema_results": schema_results,
@@ -256,6 +258,7 @@ async def run_harmonize(
                         suffix,
                         cached_schema,
                         ontology_columns,
+                        target_schema,
                     )
                 )
                 ontology_cached = await proposal_repo.lookup(

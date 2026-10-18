@@ -62,9 +62,12 @@ class EngineProtocol(Protocol):
         self,
         raw_df: pd.DataFrame,
         schema_mappings: list[dict[str, Any]],
+        target_schema: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Map raw cell values to canonical ontology terms (NCIT / UBERON / …).
+        ``target_schema`` is the study's target schema: its data dictionary
+        names the corpus of some fields (the default schema when ``None``).
 
         Returns dicts with keys::
 

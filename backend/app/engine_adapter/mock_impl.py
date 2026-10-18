@@ -57,6 +57,7 @@ class MockEngineAdapter:
         self,
         raw_df: pd.DataFrame,
         schema_mappings: list[dict[str, Any]],
+        target_schema: str | None = None,
     ) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         for m in schema_mappings:

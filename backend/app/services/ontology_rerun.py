@@ -5,7 +5,9 @@ Ontology mappings are first computed at harmonize time from the *engine's
 proposed* fields. When a curator edits a column to a different field, the value
 codes can become stale — this keeps them consistent:
 
-- moved **into** an ontology-bearing field (disease/body_site/treatment) → add codes,
+- moved **into** a field whose values map to ontology terms (the value
+  dictionary's fields, the engine's disease / body-site / treatment fields, and
+  fields the study's target-schema dictionary names a corpus for) → add codes,
 - moved **out** of one → drop the now-stale codes, except for values another
   column still mapped to that field shares (ontology rows are per field).
 
@@ -14,6 +16,7 @@ so a schema edit is never blocked by the ontology re-run.
 """
 from __future__ import annotations
 
+import functools
 import logging
 
 import anyio
@@ -25,6 +28,7 @@ from app.repositories import engine_proposals as proposal_repo
 from app.repositories import learned_decisions as learned_repo
 from app.repositories import mappings as mappings_repo
 from app.repositories import ontology as ontology_repo
+from app.repositories import schema_versions as schema_versions_repo
 from app.repositories import studies as studies_repo
 from app.services import engine_proposal_cache as proposal_cache
 from app.services.exporter import mapping_target
@@ -67,9 +71,16 @@ async def rerun_column_ontology(
 ) -> dict[str, int]:
     """Re-map one column's values after its field changed. Returns
     ``{"added": n, "removed": m}``. Does not commit — the caller owns the txn."""
-    if not supports_ontology_mapping(old_field) and not supports_ontology_mapping(new_field):
-        return {"added": 0, "removed": 0}
     if not raw_column or not file_key:
+        return {"added": 0, "removed": 0}
+    study = await studies_repo.get_study(db, study_id)
+    # The study's target schema decides which fields its dictionary maps.
+    version_id = study.get("schema_version_id") if study else None
+    version = await schema_versions_repo.get_by_id(db, version_id) if version_id else None
+    target_schema = version.target_schema if version else None
+    if not supports_ontology_mapping(old_field, target_schema) and not supports_ontology_mapping(
+        new_field, target_schema
+    ):
         return {"added": 0, "removed": 0}
 
     # Ontology rows belong to a field, not a column: another column that still
@@ -99,7 +110,7 @@ async def rerun_column_ontology(
 
     # Fresh engine output for the new field (empty when it isn't ontology-bearing).
     new_rows: list[dict] = []
-    if supports_ontology_mapping(new_field):
+    if supports_ontology_mapping(new_field, target_schema):
         raw_df = pd.DataFrame({raw_column: values})
         schema_mappings = [
             {"raw_column": raw_column, "matched_field": new_field, "curator_field": new_field}
@@ -107,7 +118,6 @@ async def rerun_column_ontology(
         try:
             engine = get_engine()
             health = engine.health()
-            study = await studies_repo.get_study(db, study_id)
             _, ontology_scope = proposal_cache.scopes(
                 schema_version_id=study.get("schema_version_id") if study else None,
                 ontology_snapshot_id=study.get("ontology_snapshot_id") if study else None,
@@ -131,7 +141,9 @@ async def rerun_column_ontology(
                 new_rows = hydrated
             else:
                 new_rows = await anyio.to_thread.run_sync(
-                    engine.map_values, raw_df, schema_mappings
+                    functools.partial(
+                        engine.map_values, raw_df, schema_mappings, target_schema=target_schema
+                    )
                 )
                 await proposal_repo.upsert_many(
                     db,
@@ -155,7 +167,7 @@ async def rerun_column_ontology(
     # (don't clobber the curator's decisions or duplicate a shared row).
     existing = (
         await ontology_repo.existing_value_keys(db, study_id, {new_field}, spellings)
-        if supports_ontology_mapping(new_field)
+        if supports_ontology_mapping(new_field, target_schema)
         else set()
     )
     fresh = [

@@ -57,6 +57,7 @@ def ontology_inputs(
     suffix: str,
     schema_rows: list[dict],
     ontology_columns: list[str] | None,
+    target_schema: str | None = None,
 ) -> dict[str, tuple[str, str]]:
     sep = "\t" if suffix in (".tsv", ".txt") else ","
     scope = {column.strip() for column in (ontology_columns or []) if column.strip()}
@@ -71,7 +72,7 @@ def ontology_inputs(
             continue
         if scope and raw_column not in scope:
             continue
-        if not supports_ontology_mapping(field):
+        if not supports_ontology_mapping(field, target_schema):
             continue
         for value in raw_df[raw_column].dropna().unique():
             raw_value = str(value)

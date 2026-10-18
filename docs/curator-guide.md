@@ -159,21 +159,39 @@ proposed standard term, code, and confidence.
 ### Which columns produce ontology terms
 
 The Ontology stage does not cover every column. Values are resolved only for
-columns whose accepted target field is one of a fixed set that routes to a
-controlled vocabulary:
+columns whose accepted target field has a term vocabulary:
 
-| Target field | Vocabulary |
-| --- | --- |
-| `disease`, `target_condition`, `cancer_type` | NCIt |
-| `body_site` | UBERON |
-| `treatment`, `treatment_name`, `treatment_type` | NCIt |
+1. **Fields the target schema's data dictionary gives terms.** The lab's data
+   dictionaries name, per field, the ontology branches and terms its values
+   come from (for example, every descendant of NCIt *Disease or Disorder*).
+   Each value is matched against them one ontology at a time, and the
+   best-scoring term wins:
 
-Anything else falls back to the value dictionary, which covers far less. This
-is why the Ontology stage can look almost empty even when every column mapped
-successfully: if a target schema names its fields differently — for example
-GDC's `tissue_or_organ_of_origin` or `primary_diagnosis` rather than
-`body_site` or `disease` — few or no columns qualify, and the stage will show
-only a handful of rows. That is the current coverage, not a failed run.
+   | Target schema | Target field | Terms |
+   | --- | --- | --- |
+   | OmicsMLRepo cBioPortal (default) | `disease_type`, `target_condition` | NCIt Disease or Disorder |
+   | | `country` | NCIt Country |
+   | | `age_group` | the NCIt terms the dictionary lists |
+   | curatedMetagenomicData | `disease`, `disease_details`, `target_condition` | NCIt Disease or Disorder, MONDO diseases, and the NCIt terms the dictionary lists (such as Healthy) |
+   | | `body_site` | the UBERON terms the dictionary lists |
+   | | `body_site_details` | UBERON anatomical entities |
+   | | `treatment` | NCIt Drug, Food, Chemical or Biomedical Material, and the NCIt terms the dictionary lists |
+   | | `country`, `sex`, `age_group`, and its other listed-term fields | NCIt |
+
+2. **Other disease, body-site, and treatment fields**, by name, in any target
+   schema (GDC included):
+
+   | Target field | Vocabulary |
+   | --- | --- |
+   | `disease`, `target_condition`, `cancer_type`, `disease_type`, `primary_diagnosis`, `primary_disease` | NCIt Neoplasm |
+   | `body_site`, `primary_site`, `tissue_or_organ_of_origin`, `site_of_resection_or_biopsy`, `biospecimen_anatomic_site` | NCIt Body Part |
+   | `treatment`, `treatment_name`, `treatment_type`, `therapeutic_agents` | NCIt Pharmacologic Substance |
+
+Anything else falls back to the value dictionary, which covers far less. That
+includes fields whose dictionary names an ontology the engine cannot search
+yet, such as ancestry (HANCESTRO) and smoking status (SNOMED CT), so the
+Ontology stage can show only a handful of rows for a study whose columns all
+mapped. That is the current coverage, not a failed run.
 
 - **Accept** confirms the displayed term and code.
 - **Reject** declines that proposed term for the raw value.
