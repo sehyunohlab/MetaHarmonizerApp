@@ -2,7 +2,8 @@ import type { ExportCellChange, ExportChangeReason, ExportColumnChange, ExportPr
 
 export const PAGE_SIZE = 50;
 
-/** Separates the values of columns merged into one (see the backend exporter). */
+/** Separates the values of columns merged into one, unless the lab's data
+ *  dictionary gives the field another separator (see the backend exporter). */
 export const MULTI_VALUE_DELIMITER = '<;>';
 
 export const REASON_META: Record<ExportChangeReason, { label: string; hint: string }> = {

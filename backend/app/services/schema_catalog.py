@@ -27,6 +27,14 @@ def default_schema_key() -> str:
     return _schema_registry.default_key()
 
 
+def field_separators(key: str | None) -> dict[str, str]:
+    """The separator the lab joins each field's values with, for target schema
+    ``key``: ``{field name (lower case): "<;>" or ";"}`` (see ``_schema_registry``)."""
+    from app.engine_adapter import _schema_registry
+
+    return _schema_registry.field_separators(key)
+
+
 def is_valid_schema(key: str | None) -> bool:
     from app.engine_adapter import _schema_registry
 

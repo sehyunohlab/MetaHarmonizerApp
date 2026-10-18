@@ -165,6 +165,16 @@ versioning once a stable `1.x` release is declared.
   current dictionary. The cBioPortal files write the lab's `patientId` and
   `sampleId` as `PATIENT_ID` and `SAMPLE_ID`, and on-demand LLM suggestions use
   the study's target schema instead of the engine's built-in cBioPortal preset.
+- Merged values now use each field's separator from the lab's data dictionary
+  for the study's target schema, instead of `<;>` for every field. The lab's
+  published curated metadata (OmicsMLRepo, Zenodo record 16458151) follows its
+  dictionaries: in cBioPortal, `<;>` for body site, cancer type, disease and
+  treatments but `;` for target condition and study design (smoker too, by the
+  dictionary); in curatedMetagenomicData, `;` for most fields and `<;>` only
+  for key:value fields. Ancestry, for which the cBioPortal dictionary names no
+  separator, uses `;` as the release does. A field without a separator keeps
+  `<;>`, and `original_<field>_value` keeps `<;>`, as in the lab's curation
+  notebooks. The Harmonized CSV, the preview and the cBioPortal files agree.
 
 ## [0.1.0] - 2026-08-19
 

@@ -12,6 +12,8 @@ list the choices without paying the engine's torch import cost.
 
 from __future__ import annotations
 
+import csv
+import io
 import logging
 import os
 from functools import lru_cache
@@ -59,6 +61,7 @@ def _discover() -> dict[str, dict]:
         key = target.name[: -len(_SUFFIX)]
         alias = next(iter(sorted(sub.glob("*_target_attrs_alias*.csv"))), None)
         values = next(iter(sorted(sub.glob("*_target_attrs_allowed_values.json"))), None)
+        dictionary = sub / f"{key}_schema.csv"
         found[key] = {
             "key": key,
             "label": _LABELS.get(key, key),
@@ -66,7 +69,44 @@ def _discover() -> dict[str, dict]:
             "target_schema_path": str(target),
             "alias_dict_path": str(alias) if alias else None,
             "value_dict_path": str(values) if values else None,
+            "dictionary_path": str(dictionary) if dictionary.is_file() else None,
         }
+    return found
+
+
+# Separators the lab's published curated data uses for a field its data
+# dictionary gives none: in its cBioPortal release (OmicsMLRepo, Zenodo
+# record 16458151), ancestry joins values with ";" in 2,167 cells and
+# ancestry_details in 20, never with "<;>".
+_RELEASE_SEPARATORS: dict[str, dict[str, str]] = {
+    "omicsmlprepo_cbio": {"ancestry": ";", "ancestry_details": ";"},
+}
+
+
+@lru_cache(maxsize=16)
+def field_separators(key: str | None) -> dict[str, str]:
+    """``{field name (lower case): separator}`` for the fields of target schema
+    ``key`` whose values the lab joins with a given separator: its data
+    dictionary's ``delimiter`` column (``<;>`` or ``;``). Empty for a schema
+    without a dictionary, such as GDC."""
+    schema = _discover().get(key or "")
+    found = dict(_RELEASE_SEPARATORS.get(key or "", {}))
+    path = schema and schema.get("dictionary_path")
+    if not path:
+        return found
+    try:
+        with open(path, encoding="utf-8", newline="") as fh:
+            text = fh.read()
+        # The lab writes its dictionaries with R: comma-separated, or
+        # space-separated with quotes (write.table).
+        first = text.split("\n", 1)[0]
+        rows = csv.DictReader(io.StringIO(text), delimiter="," if first.count(",") > first.count(" ") else " ")
+        for row in rows:
+            name, separator = (row.get("col.name") or "").strip(), (row.get("delimiter") or "").strip()
+            if name and separator and separator != "NA":
+                found[name.lower()] = separator
+    except Exception:  # noqa: BLE001 — a missing dictionary means the default separator
+        logger.warning("could not read the data dictionary of %s", key, exc_info=True)
     return found
 
 
