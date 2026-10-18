@@ -208,6 +208,9 @@ versioning once a stable `1.x` release is declared.
   per-field corpora in their own job (continued by a second when they do not
   fit in one), and can rebuild only those (`fields_only`) or run without
   publishing (`dry_run`).
+- Fixed duplicate rows on the Ontology page: when a column's values included
+  variants the ontology engine reads alike (`BLADDER CANCER` and
+  `BLADDER_CANCER`, or a singular and its plural), each got its row twice.
 
 ## [0.1.0] - 2026-08-19
 
