@@ -184,7 +184,7 @@ columns whose accepted target field has a term vocabulary:
    | Target field | Vocabulary |
    | --- | --- |
    | `disease`, `target_condition`, `cancer_type`, `disease_type`, `primary_diagnosis`, `primary_disease` | NCIt Neoplasm |
-   | `body_site`, `primary_site`, `tissue_or_organ_of_origin`, `site_of_resection_or_biopsy`, `biospecimen_anatomic_site` | NCIt Body Part |
+   | `body_site`, `primary_site`, `tissue_or_organ_of_origin`, `site_of_resection_or_biopsy`, `biospecimen_anatomic_site` | UBERON |
    | `treatment`, `treatment_name`, `treatment_type`, `therapeutic_agents` | NCIt Pharmacologic Substance |
 
 Anything else falls back to the value dictionary, which covers far less. That

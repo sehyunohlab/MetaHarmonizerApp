@@ -443,9 +443,9 @@ jobs:
         working-directory: backend
         run: python -m scripts.package_kb -o ../kb/kb_offline_bundle.tar.gz
 
-      - name: Verify the bundle is a superset (EFO + 5 corpora + field corpora + KB + models)
+      - name: Verify the bundle is a superset (EFO + 4 corpora + field corpora + KB + models)
         run: |
-          python -c "import sys,tarfile; n=set(tarfile.open('kb/kb_offline_bundle.tar.gz').getnames()); req={'kb.mhkb.tar.gz','corpus/retrieved_ontologies/efo_phenotype_corpus.csv','corpus/retrieved_ontologies/ncit_disease_corpus.csv','corpus/retrieved_ontologies/ncit_treatment_corpus.csv','corpus/retrieved_ontologies/uberon_bodysite_corpus.csv','corpus/retrieved_ontologies/ncit_bodysite_corpus.csv','corpus/fields/units.json'}; tops={x.split('/')[0] for x in n}; miss=[r for r in req if r not in n]+[t for t in ('model_cache','hf_hub') if t not in tops]; sys.exit('NOT A SUPERSET: %s' % miss) if miss else print('verified superset: EFO + 5 corpora + field corpora + KB + models')"
+          python -c "import sys,tarfile; n=set(tarfile.open('kb/kb_offline_bundle.tar.gz').getnames()); req={'kb.mhkb.tar.gz','corpus/retrieved_ontologies/efo_phenotype_corpus.csv','corpus/retrieved_ontologies/ncit_disease_corpus.csv','corpus/retrieved_ontologies/ncit_treatment_corpus.csv','corpus/retrieved_ontologies/uberon_bodysite_corpus.csv','corpus/fields/units.json'}; tops={x.split('/')[0] for x in n}; miss=[r for r in req if r not in n]+[t for t in ('model_cache','hf_hub') if t not in tops]; sys.exit('NOT A SUPERSET: %s' % miss) if miss else print('verified superset: EFO + 4 corpora + field corpora + KB + models')"
 
       - name: Compute sha256
         id: sha
