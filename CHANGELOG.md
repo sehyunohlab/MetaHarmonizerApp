@@ -211,6 +211,17 @@ versioning once a stable `1.x` release is declared.
 - Fixed duplicate rows on the Ontology page: when a column's values included
   variants the ontology engine reads alike (`BLADDER CANCER` and
   `BLADDER_CANCER`, or a singular and its plural), each got its row twice.
+- Fixed the weekly **Real Engine Regression** failing since the KB was
+  published in parts: it downloaded the single `kb_offline_bundle.tar.gz`,
+  which no longer exists. It now joins the parts and checks the published
+  sha256, after freeing runner disk for the larger bundle.
+- Fixed Dependabot's npm updates for the dashboard and the E2E suite: 135
+  lockfile entries pointed at a private npm mirror Dependabot cannot read
+  (`403`). They now resolve from `registry.npmjs.org` with the registry's
+  sha512 integrity (the same tarballs; each mirror sha1 matches the registry's
+  shasum), and CI fails when a lockfile resolves from any other registry.
+- Release downloads in CI (gitleaks, Trivy, the cBioPortal validator) retry
+  transient errors, so a GitHub `504` no longer fails the weekly security scan.
 
 ## [0.1.0] - 2026-08-19
 

@@ -41,6 +41,10 @@ python scripts/check_engine_boundary.py
 Major dependency, engine, schema, and infrastructure changes need targeted
 benchmarks or migration evidence in addition to the standard suite.
 
+`package-lock.json` files must resolve packages from `https://registry.npmjs.org/`.
+An npm configured with a private mirror writes the mirror's tarball URLs into the
+lockfile, which Dependabot and other contributors cannot fetch; CI rejects them.
+
 ## Data and secrets
 
 Use synthetic or de-identified fixtures. Never commit production data,

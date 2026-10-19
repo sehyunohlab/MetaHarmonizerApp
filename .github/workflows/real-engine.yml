@@ -5,7 +5,7 @@ name: Real Engine Regression
 # caught automatically — the fast CI suite runs against the mock only.
 #
 # The schema job downloads the MiniLM encoder. The ontology job downloads and
-# checksum-verifies the published ~1.5 GB FAISS/model bundle, probes all required
+# checksum-verifies the published ~2.7 GB FAISS/model bundle, probes all required
 # assets offline, and runs a real UBERON mapping.
 
 on:
@@ -61,16 +61,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Free runner disk for the KB
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      # The bundle is published in parts under GitHub's 2 GiB asset limit; the
+      # script joins them, and the checksum covers the joined bundle.
       - name: Fetch and verify the published KB bundle
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/kb"
-          gh release download kb-latest \
-            -p kb_offline_bundle.tar.gz \
-            -p kb_offline_bundle.sha256 \
-            -D "$RUNNER_TEMP/kb"
+          bash scripts/fetch_kb_release.sh "$RUNNER_TEMP/kb"
+          gh release download kb-latest -p kb_offline_bundle.sha256 -D "$RUNNER_TEMP/kb" --clobber
           cd "$RUNNER_TEMP/kb"
           sha256sum --check kb_offline_bundle.sha256
       - name: Seed and probe the offline bundle

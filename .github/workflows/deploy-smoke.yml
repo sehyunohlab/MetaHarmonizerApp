@@ -119,8 +119,8 @@ jobs:
           set -euo pipefail
           archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
           base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
-          curl -sSfL "$base/$archive" -o "/tmp/$archive"
-          curl -sSfL "$base/trivy_${TRIVY_VERSION}_checksums.txt" -o /tmp/trivy-checksums.txt
+          curl -sSfL --retry 5 --retry-connrefused "$base/$archive" -o "/tmp/$archive"
+          curl -sSfL --retry 5 --retry-connrefused "$base/trivy_${TRIVY_VERSION}_checksums.txt" -o /tmp/trivy-checksums.txt
           grep " $archive$" /tmp/trivy-checksums.txt | sed 's|  |  /tmp/|' | sha256sum --check --strict
           mkdir /tmp/trivy
           tar -xzf "/tmp/$archive" -C /tmp/trivy trivy
