@@ -1,14 +1,14 @@
-fastapi==0.143.0
-starlette==1.7.0
+fastapi==0.161.1
+starlette==1.9.0
 uvicorn[standard]==0.54.0
 python-multipart==0.0.32
-pydantic==2.14.0
-pydantic-settings==2.15.0
+pydantic==2.14.1
+pydantic-settings==2.16.1
 pandas==2.3.3
 rapidfuzz==3.14.6
 numpy==1.26.4
 sentence-transformers==5.7.0
-transformers==5.19.0
+transformers==5.20.2
 # Docker images preinstall the hash-pinned 2.14.0+cpu wheel for their
 # architecture; keep this compatibility floor synchronized with Dockerfile.
 torch>=2.14.0
@@ -16,16 +16,16 @@ requests>=2.34.2
 google-genai>=1.75.0
 
 # --- Persistence + cache (Sprint 2 / Dev infra) ---------------------------
-sqlalchemy[asyncio]==2.1.4
+sqlalchemy[asyncio]==2.1.6
 asyncpg==0.32.0
-alembic==1.20.0
+alembic==1.20.1
 redis==5.3.1
 # Job queue for the harmonize pipeline (Sprint 4).
 arq==0.28.0
 
 # --- Observability --------------------------------------------------------
 # Optional: error tracking. init_sentry() no-ops if unset/uninstalled.
-sentry-sdk[fastapi]==2.71.0
+sentry-sdk[fastapi]==2.73.0
 # Prometheus golden-signal metrics at admin-scoped /metrics.
 prometheus-client==0.26.0
 
