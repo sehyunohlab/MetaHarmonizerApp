@@ -5,6 +5,8 @@ versioning once a stable `1.x` release is declared.
 
 ## [Unreleased]
 
+- Updated the pinned frontend publisher image to Alpine 3.23 to address the
+  musl vulnerability reported by the container security gate.
 - Institutional handover and authority transfer.
 - Continued observability, availability, and mixed-load hardening.
 - Refreshed dependency baselines and expanded auditing to frontend build tools.

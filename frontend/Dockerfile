@@ -24,7 +24,7 @@ RUN npm run build \
 
 # Publisher stage: holds the built assets and copies them into the mounted
 # web volume, then exits (a one-shot service in compose).
-FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS dist
+FROM alpine:3.23@sha256:f3d55900449227ae9e237ede521e7b665d53a253b42065ba90b9db9275e198ad AS dist
 WORKDIR /dist
 ARG SOURCE_COMMIT=unknown
 LABEL org.opencontainers.image.revision="${SOURCE_COMMIT}"
